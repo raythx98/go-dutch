@@ -1,0 +1,12 @@
+input ExpenseInput {
+    amount: Decimal!
+    currencyId: ID!
+    expenseAt: Time!
+    payers: [ShareInput!]!
+    shares: [ShareInput!]!
+}
+
+input ShareInput {
+    userId: ID!
+    amount: Decimal!
+}

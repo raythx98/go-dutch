@@ -1,0 +1,4 @@
+type Subscription {
+    expenseAdded(userId: ID!): Expense!
+    expenseUpdated(userId: ID!): Expense!
+}

@@ -1,0 +1,43 @@
+type Currency {
+    id: ID!
+    code: String!
+    name: String!
+    symbol: String!
+}
+
+type User {
+    id: ID!
+    name: String!
+    token: String!
+}
+
+type Group {
+    id: ID!
+    name: String!
+    members: [User!]!
+}
+
+type ExpenseSummary {
+    expenses: [Expense!]!
+    owes: [OweDetail!]!
+    owed: [OweDetail!]!
+}
+
+type OweDetail {
+    user: User!
+    amount: Decimal!
+}
+
+type Expense {
+    id: ID!
+    amount: Decimal!
+    currency: Currency!
+    expenseAt: Time!
+    payers: [Share!]!
+    shares: [Share!]!
+}
+
+type Share {
+    user: User!
+    amount: Decimal!
+}
