@@ -17,14 +17,14 @@ import (
 	"github.com/raythx98/go-dutch/tools/pghelper"
 	"github.com/raythx98/gohelpme/errorhelper"
 	"github.com/raythx98/gohelpme/tool/logger"
-	"github.com/raythx98/gohelpme/tool/reqctx"
+	"github.com/shopspring/decimal"
 )
 
 // Register is the resolver for the register field.
 func (r *mutationResolver) Register(ctx context.Context, email string, password string, username string) (*model.User, error) {
 	_, err := r.DbQuery.GetUserByEmail(ctx, email)
 	if err == nil {
-		return nil, errorhelper.NewAppError(1, "Email has already been registered", err)
+		return nil, errorhelper.NewAppError(EmailAlreadyRegistered, Messages[EmailAlreadyRegistered], err)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -60,7 +60,7 @@ func (r *mutationResolver) Register(ctx context.Context, email string, password 
 func (r *mutationResolver) Login(ctx context.Context, email string, password string) (*model.User, error) {
 	user, err := r.DbQuery.GetUserByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorhelper.NewAppError(2, "Email is not registered", err)
+		return nil, errorhelper.NewAppError(EmailNotRegistered, Messages[EmailNotRegistered], err)
 	}
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 	}
 
 	if !authenticated {
-		return nil, errorhelper.NewAppError(3, "Incorrect Password", err)
+		return nil, errorhelper.NewAppError(InvalidCredentials, Messages[InvalidCredentials], err)
 	}
 
 	accessToken, err := r.Jwt.NewAccessToken(strconv.FormatInt(user.ID, 10))
@@ -108,7 +108,7 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 	}
 
 	err = qtx.AddUserToGroup(ctx, db.AddUserToGroupParams{
-		UserID:  *reqctx.GetValue(ctx).UserId,
+		UserID:  getActionTaker(ctx),
 		GroupID: group.ID,
 	})
 	if err != nil {
@@ -119,20 +119,22 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 		return nil, err
 	}
 
+	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	response := &model.Group{
 		ID:      group.ID,
 		Name:    group.Name,
 		Members: make([]*model.User, 0),
 	}
 
-	members, err := qtx.GetGroupMembers(ctx, group.ID)
-	if err == nil {
-		for _, member := range members {
-			response.Members = append(response.Members, &model.User{
-				ID:   member.ID,
-				Name: member.Username,
-			})
-		}
+	for _, member := range members {
+		response.Members = append(response.Members, &model.User{
+			ID:   member.ID,
+			Name: member.Username,
+		})
 	}
 
 	return response, nil
@@ -140,25 +142,21 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 
 // AddMember is the resolver for the addMember field.
 func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, email string) (*model.Group, error) {
-	userId := *reqctx.GetValue(ctx).UserId
+	userId := getActionTaker(ctx)
 
 	group, err := r.DbQuery.GetGroup(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, groupID)
+	members, err := checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
 	if err != nil {
 		return nil, err
 	}
 
-	if !slices.ContainsFunc(members, func(n db.User) bool { return n.ID == userId }) {
-		return nil, errorhelper.NewAppError(4, "You are not an existing group member", nil)
-	}
-
 	user, err := r.DbQuery.GetUserByEmail(ctx, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorhelper.NewAppError(5, "User does not exist", err)
+		return nil, errorhelper.NewAppError(UserDoesNotExist, Messages[UserDoesNotExist], err)
 	}
 	if err != nil {
 		return nil, err
@@ -192,47 +190,29 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, email s
 	return response, nil
 }
 
-// AddExpense is the resolver for the addExpense field.
-func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error) {
-	userId := *reqctx.GetValue(ctx).UserId
-
-	members, err := r.DbQuery.GetGroupMembers(ctx, groupID)
+// AddRepayment is the resolver for the addRepayment field.
+func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, input model.RepaymentInput) (*model.Expense, error) {
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, getActionTaker(ctx))
 	if err != nil {
 		return nil, err
 	}
 
-	if !slices.ContainsFunc(members, func(n db.User) bool { return n.ID == userId }) {
-		return nil, errorhelper.NewAppError(4, "You are not an existing group member", nil)
-	}
-
-	currencies, err := r.DbQuery.GetCurrenciesByIds(ctx, []int64{input.CurrencyID})
-	if err != nil {
-		return nil, err
-	}
-	if len(currencies) == 0 {
-		return nil, errorhelper.NewAppError(6, "Currency does not exist", nil)
-	}
-
-	userIds := make([]int64, 0)
-	for _, payer := range input.Payers {
-		if !slices.Contains(userIds, payer.UserID) {
-			userIds = append(userIds, payer.UserID)
-		}
-	}
-	for _, share := range input.Shares {
-		if !slices.Contains(userIds, share.UserID) {
-			userIds = append(userIds, share.UserID)
-		}
-	}
-
-	users, err := r.DbQuery.GetUsersByIds(ctx, userIds)
+	currency, err := getCurrency(ctx, r.DbQuery, err, input.CurrencyID)
 	if err != nil {
 		return nil, err
 	}
 
-	usersMap := make(map[int64]db.User)
+	users, err := r.DbQuery.GetUsersByIds(ctx, []int64{input.Debtor, input.Creditor})
+	if err != nil {
+		return nil, err
+	}
+	if len(users) != 2 {
+		return nil, errorhelper.NewAppError(UserDoesNotExist, Messages[UserDoesNotExist], nil)
+	}
+
+	userMap := make(map[int64]db.User)
 	for _, user := range users {
-		usersMap[user.ID] = user
+		userMap[user.ID] = user
 	}
 
 	tx, err := r.Db.Pool().Begin(ctx)
@@ -250,7 +230,8 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
 		GroupID:    groupID,
-		Amount:     input.Amount,
+		Type:       ExpenseTypeRepayment,
+		Amount:     pghelper.FromDecimal(input.Amount),
 		CurrencyID: input.CurrencyID,
 		ExpenseAt:  pghelper.Time(&input.ExpenseAt),
 	})
@@ -258,111 +239,74 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 		return nil, err
 	}
 
-	response := &model.Expense{
-		ID:     expense.ID,
-		Amount: expense.Amount,
-		Currency: &model.Currency{
-			ID:     currencies[0].ID,
-			Code:   currencies[0].Code,
-			Name:   currencies[0].Name,
-			Symbol: currencies[0].Symbol,
-		},
-		ExpenseAt: expense.ExpenseAt.Time,
-		Payers:    make([]*model.Share, 0),
-		Shares:    make([]*model.Share, 0),
+	expensePayer, err := qtx.CreateExpensePayer(ctx, db.CreateExpensePayerParams{
+		ExpenseID: expense.ID,
+		UserID:    input.Creditor,
+		Amount:    pghelper.FromDecimal(input.Amount),
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	for _, payer := range input.Payers {
-		expensePayer, err := qtx.CreateExpensePayer(ctx, db.CreateExpensePayerParams{
-			ExpenseID: expense.ID,
-			UserID:    payer.UserID,
-			Amount:    payer.Amount,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		response.Payers = append(response.Payers, &model.Share{
-			User: &model.User{
-				ID:   expensePayer.UserID,
-				Name: usersMap[expensePayer.UserID].Username,
-			},
-			Amount: expensePayer.Amount,
-		})
-	}
-
-	for _, share := range input.Shares {
-		expenseSharer, err := qtx.CreateExpenseShare(ctx, db.CreateExpenseShareParams{
-			ExpenseID: expense.ID,
-			UserID:    share.UserID,
-			Amount:    share.Amount,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		response.Shares = append(response.Shares, &model.Share{
-			User: &model.User{
-				ID:   expenseSharer.UserID,
-				Name: usersMap[expenseSharer.UserID].Username,
-			},
-			Amount: expenseSharer.Amount,
-		})
+	expenseSharer, err := qtx.CreateExpenseShare(ctx, db.CreateExpenseShareParams{
+		ExpenseID: expense.ID,
+		UserID:    input.Debtor,
+		Amount:    pghelper.FromDecimal(input.Amount),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
-	return response, nil
+	return &model.Expense{
+		ID:     expense.ID,
+		Amount: pghelper.Decimal(expense.Amount),
+		Currency: &model.Currency{
+			ID:     currency.ID,
+			Code:   currency.Code,
+			Name:   currency.Name,
+			Symbol: currency.Symbol,
+		},
+		ExpenseAt: expense.ExpenseAt.Time,
+		Payers: []*model.Share{
+			{
+				User: &model.User{
+					ID:   expensePayer.UserID,
+					Name: userMap[expensePayer.UserID].Username,
+				},
+				Amount: pghelper.Decimal(expensePayer.Amount),
+			},
+		},
+		Shares: []*model.Share{
+			{
+				User: &model.User{
+					ID:   expenseSharer.UserID,
+					Name: userMap[expenseSharer.UserID].Username,
+				},
+				Amount: pghelper.Decimal(expenseSharer.Amount),
+			},
+		},
+	}, nil
 }
 
-// EditExpense is the resolver for the editExpense field.
-func (r *mutationResolver) EditExpense(ctx context.Context, expenseID int64, input model.ExpenseInput) (*model.Expense, error) {
-	userId := *reqctx.GetValue(ctx).UserId
-
-	existingExpense, err := r.DbQuery.GetExpense(ctx, expenseID)
+// AddExpense is the resolver for the addExpense field.
+func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error) {
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, getActionTaker(ctx))
 	if err != nil {
 		return nil, err
 	}
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, existingExpense.GroupID)
+	currency, err := getCurrency(ctx, r.DbQuery, err, input.CurrencyID)
 	if err != nil {
 		return nil, err
 	}
 
-	if !slices.ContainsFunc(members, func(n db.User) bool { return n.ID == userId }) {
-		return nil, errorhelper.NewAppError(4, "You are not an existing group member", nil)
-	}
-
-	currencies, err := r.DbQuery.GetCurrenciesByIds(ctx, []int64{input.CurrencyID})
+	usersMap, err := fetchUsersMap(ctx, r.DbQuery, input)
 	if err != nil {
 		return nil, err
-	}
-	if len(currencies) == 0 {
-		return nil, errorhelper.NewAppError(6, "Currency does not exist", nil)
-	}
-
-	userIds := make([]int64, 0)
-	for _, payer := range input.Payers {
-		if !slices.Contains(userIds, payer.UserID) {
-			userIds = append(userIds, payer.UserID)
-		}
-	}
-	for _, share := range input.Shares {
-		if !slices.Contains(userIds, share.UserID) {
-			userIds = append(userIds, share.UserID)
-		}
-	}
-
-	users, err := r.DbQuery.GetUsersByIds(ctx, userIds)
-	if err != nil {
-		return nil, err
-	}
-
-	usersMap := make(map[int64]db.User)
-	for _, user := range users {
-		usersMap[user.ID] = user
 	}
 
 	tx, err := r.Db.Pool().Begin(ctx)
@@ -378,66 +322,58 @@ func (r *mutationResolver) EditExpense(ctx context.Context, expenseID int64, inp
 
 	qtx := r.DbQuery.WithTx(tx)
 
-	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
-		GroupID:    existingExpense.GroupID,
-		Amount:     input.Amount,
-		CurrencyID: input.CurrencyID,
-		ExpenseAt:  pghelper.Time(&input.ExpenseAt),
-	})
+	response, err := createExpense(ctx, qtx, groupID, input, currency, usersMap)
 	if err != nil {
 		return nil, err
 	}
 
-	response := &model.Expense{
-		ID:     expense.ID,
-		Amount: expense.Amount,
-		Currency: &model.Currency{
-			ID:     currencies[0].ID,
-			Code:   currencies[0].Code,
-			Name:   currencies[0].Name,
-			Symbol: currencies[0].Symbol,
-		},
-		ExpenseAt: expense.ExpenseAt.Time,
-		Payers:    make([]*model.Share, 0),
-		Shares:    make([]*model.Share, 0),
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 
-	for _, payer := range input.Payers {
-		expensePayer, err := qtx.CreateExpensePayer(ctx, db.CreateExpensePayerParams{
-			ExpenseID: expense.ID,
-			UserID:    payer.UserID,
-			Amount:    payer.Amount,
-		})
-		if err != nil {
-			return nil, err
-		}
+	return response, nil
+}
 
-		response.Payers = append(response.Payers, &model.Share{
-			User: &model.User{
-				ID:   expensePayer.UserID,
-				Name: usersMap[expensePayer.UserID].Username,
-			},
-			Amount: expensePayer.Amount,
-		})
+// EditExpense is the resolver for the editExpense field.
+func (r *mutationResolver) EditExpense(ctx context.Context, expenseID int64, input model.ExpenseInput) (*model.Expense, error) {
+	userId := getActionTaker(ctx)
+
+	existingExpense, err := r.DbQuery.GetExpense(ctx, expenseID)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, share := range input.Shares {
-		expenseSharer, err := qtx.CreateExpenseShare(ctx, db.CreateExpenseShareParams{
-			ExpenseID: expense.ID,
-			UserID:    share.UserID,
-			Amount:    share.Amount,
-		})
-		if err != nil {
-			return nil, err
-		}
+	_, err = checkIsGroupMember(ctx, r.DbQuery, existingExpense.GroupID, userId)
+	if err != nil {
+		return nil, err
+	}
 
-		response.Shares = append(response.Shares, &model.Share{
-			User: &model.User{
-				ID:   expenseSharer.UserID,
-				Name: usersMap[expenseSharer.UserID].Username,
-			},
-			Amount: expenseSharer.Amount,
-		})
+	currency, err := getCurrency(ctx, r.DbQuery, err, input.CurrencyID)
+	if err != nil {
+		return nil, err
+	}
+
+	usersMap, err := fetchUsersMap(ctx, r.DbQuery, input)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := r.Db.Pool().Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(tx pgx.Tx, ctx context.Context) {
+		if err := tx.Rollback(ctx); err != nil {
+			r.Log.Error(ctx, "failed to rollback transaction", logger.WithError(err))
+		}
+	}(tx, ctx)
+
+	qtx := r.DbQuery.WithTx(tx)
+
+	response, err := createExpense(ctx, qtx, existingExpense.GroupID, input, currency, usersMap)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := qtx.DeleteExpense(ctx, expenseID); err != nil {
@@ -453,20 +389,16 @@ func (r *mutationResolver) EditExpense(ctx context.Context, expenseID int64, inp
 
 // DeleteExpense is the resolver for the deleteExpense field.
 func (r *mutationResolver) DeleteExpense(ctx context.Context, expenseID int64) (bool, error) {
-	userId := *reqctx.GetValue(ctx).UserId
+	userId := getActionTaker(ctx)
 
 	expense, err := r.DbQuery.GetExpense(ctx, expenseID)
 	if err != nil {
 		return false, err
 	}
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, expense.GroupID)
+	_, err = checkIsGroupMember(ctx, r.DbQuery, expense.GroupID, userId)
 	if err != nil {
 		return false, err
-	}
-
-	if !slices.ContainsFunc(members, func(n db.User) bool { return n.ID == userId }) {
-		return false, errorhelper.NewAppError(4, "You are not an existing group member", nil)
 	}
 
 	if err := r.DbQuery.DeleteExpense(ctx, expenseID); err != nil {
@@ -478,7 +410,7 @@ func (r *mutationResolver) DeleteExpense(ctx context.Context, expenseID int64) (
 
 // Groups is the resolver for the groups field.
 func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
-	userId := *reqctx.GetValue(ctx).UserId
+	userId := getActionTaker(ctx)
 
 	groups, err := r.DbQuery.GetGroupsByUser(ctx, userId)
 	if err != nil {
@@ -512,16 +444,9 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 
 // Expenses is the resolver for the expenses field.
 func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.ExpenseSummary, error) {
-	userId := *reqctx.GetValue(ctx).UserId
+	userId := getActionTaker(ctx)
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, groupID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !slices.ContainsFunc(members, func(n db.User) bool { return n.ID == userId }) {
-		return nil, errorhelper.NewAppError(4, "You are not an existing group member", nil)
-	}
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
 
 	expenses, err := r.DbQuery.GetExpenses(ctx, groupID)
 	if err != nil {
@@ -530,14 +455,10 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 	expenseIds := make([]int64, 0)
 	currencyIds := make([]int64, 0)
-	userIds := make([]int64, 0)
 	for _, expense := range expenses {
 		expenseIds = append(expenseIds, expense.ID)
 		if !slices.Contains(currencyIds, expense.CurrencyID) {
 			currencyIds = append(currencyIds, expense.CurrencyID)
-		}
-		if !slices.Contains(userIds, userId) {
-			userIds = append(userIds, userId)
 		}
 	}
 
@@ -555,10 +476,28 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 	if err != nil {
 		return nil, err
 	}
+	if len(currencies) != len(currencyIds) {
+		return nil, errorhelper.NewAppError(CurrencyNotSupported, Messages[CurrencyNotSupported], nil)
+	}
+
+	userIds := make([]int64, 0)
+	for _, p := range payers {
+		if !slices.Contains(userIds, p.UserID) {
+			userIds = append(userIds, p.UserID)
+		}
+	}
+	for _, s := range shares {
+		if !slices.Contains(userIds, s.UserID) {
+			userIds = append(userIds, s.UserID)
+		}
+	}
 
 	users, err := r.DbQuery.GetUsersByIds(ctx, userIds)
 	if err != nil {
 		return nil, err
+	}
+	if len(users) != len(userIds) {
+		return nil, errorhelper.NewAppError(UserDoesNotExist, Messages[UserDoesNotExist], nil)
 	}
 
 	payersMap := make(map[int64][]db.ExpensePayer)
@@ -583,13 +522,14 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 	response := &model.ExpenseSummary{
 		Expenses: make([]*model.Expense, 0),
-		Owes:     make([]*model.OweDetail, 0),
-		Owed:     make([]*model.OweDetail, 0),
+		Owes:     make([]*model.Owe, 0),
+		Owed:     make([]*model.Owe, 0),
 	}
 	for _, expense := range expenses {
 		expenseModel := &model.Expense{
 			ID:     expense.ID,
-			Amount: expense.Amount,
+			Type:   expenseTypeString(expense.Type),
+			Amount: pghelper.Decimal(expense.Amount),
 			Currency: &model.Currency{
 				ID:     currencyMap[expense.CurrencyID].ID,
 				Code:   currencyMap[expense.CurrencyID].Code,
@@ -607,7 +547,7 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 					ID:   payer.UserID,
 					Name: userMap[payer.UserID].Username,
 				},
-				Amount: payer.Amount,
+				Amount: pghelper.Decimal(payer.Amount),
 			})
 		}
 
@@ -617,14 +557,112 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 					ID:   share.UserID,
 					Name: userMap[share.UserID].Username,
 				},
-				Amount: share.Amount,
+				Amount: pghelper.Decimal(share.Amount),
 			})
 		}
 
 		response.Expenses = append(response.Expenses, expenseModel)
 	}
 
-	// TODO: Calculate Owes and Owed
+	// Positive means user has paid the amount
+	// Negative means user owes the amount
+	// SGD
+	// alice, bob, charlie
+	// Expense 1
+	// 3    , 0  , 0
+	// -1   , -1 , -1
+
+	// Expense 2
+	// 2    , 7  , 0
+	// -3   , -3 , -3
+
+	// total
+	// 1   , 3  , -4
+	// alice is owed 1
+	// bob is owed 3
+	// charlie owes 4
+
+	balances := make(map[int64]map[int64]decimal.Decimal) // currencyID -> userID -> balance
+	for _, expense := range response.Expenses {
+		currencyID := expense.Currency.ID
+		if _, ok := balances[currencyID]; !ok {
+			balances[currencyID] = make(map[int64]decimal.Decimal)
+		}
+		for _, payer := range expense.Payers {
+			balances[currencyID][payer.User.ID] = balances[currencyID][payer.User.ID].Add(payer.Amount)
+		}
+		for _, share := range expense.Shares {
+			balances[currencyID][share.User.ID] = balances[currencyID][share.User.ID].Sub(share.Amount)
+		}
+	}
+
+	// Use a greedy algorithm to calculate owed amounts
+	// Match users who are owed the most money with users who owe the most money iteratively
+	for currencyID, userBalances := range balances {
+		creditors := make([]balance, 0)
+		debtors := make([]balance, 0)
+
+		for userID, amount := range userBalances {
+			if amount.GreaterThan(decimal.Zero) {
+				creditors = append(creditors, balance{userID, amount})
+			} else if amount.LessThan(decimal.Zero) {
+				debtors = append(debtors, balance{userID, amount.Neg()})
+			}
+		}
+
+		slices.SortFunc(creditors, sortBalanceDesc)
+		slices.SortFunc(debtors, sortBalanceAsc)
+
+		i, j := 0, 0
+		for i < len(creditors) && j < len(debtors) {
+			creditor := &creditors[i]
+			debtor := &debtors[j]
+
+			amountOwed := decimal.Min(creditor.Amount, debtor.Amount)
+
+			if debtor.UserID == userId {
+				response.Owes = append(response.Owed, &model.Owe{
+					User: &model.User{
+						ID:   creditor.UserID,
+						Name: userMap[creditor.UserID].Username,
+					},
+					Amount: amountOwed,
+					Currency: &model.Currency{
+						ID:     currencyMap[currencyID].ID,
+						Code:   currencyMap[currencyID].Code,
+						Name:   currencyMap[currencyID].Name,
+						Symbol: currencyMap[currencyID].Symbol,
+					},
+				})
+			}
+
+			if creditor.UserID == userId {
+				response.Owed = append(response.Owed, &model.Owe{
+					User: &model.User{
+						ID:   debtor.UserID,
+						Name: userMap[debtor.UserID].Username,
+					},
+					Amount: amountOwed,
+					Currency: &model.Currency{
+						ID:     currencyMap[currencyID].ID,
+						Code:   currencyMap[currencyID].Code,
+						Name:   currencyMap[currencyID].Name,
+						Symbol: currencyMap[currencyID].Symbol,
+					},
+				})
+			}
+
+			creditor.Amount = creditor.Amount.Sub(amountOwed)
+			debtor.Amount = debtor.Amount.Sub(amountOwed)
+
+			if creditor.Amount.Equal(decimal.Zero) {
+				i++
+			}
+			if debtor.Amount.Equal(decimal.Zero) {
+				j++
+			}
+		}
+	}
 
 	return response, nil
 }

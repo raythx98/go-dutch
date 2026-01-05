@@ -20,6 +20,7 @@ type Currency struct {
 type Expense struct {
 	ID         int64
 	GroupID    int64
+	Type       int16
 	Amount     pgtype.Numeric
 	CurrencyID int64
 	ExpenseAt  pgtype.Timestamp

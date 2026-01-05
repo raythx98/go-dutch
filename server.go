@@ -11,7 +11,7 @@ import (
 	"github.com/raythx98/go-dutch/graphql"
 	"github.com/raythx98/go-dutch/tools/config"
 	"github.com/raythx98/go-dutch/tools/resources"
-	
+
 	"github.com/raythx98/gohelpme/errorhelper"
 	"github.com/raythx98/gohelpme/middleware"
 	"github.com/raythx98/gohelpme/tool/logger"
@@ -73,6 +73,7 @@ func main() {
 			err.Message = "Unauthorized"
 			err.Extensions["code"] = 401
 		} else {
+			tools.Log.Error(ctx, "internal server error", logger.WithError(e))
 			err.Message = "Something went wrong, please try again later"
 			err.Extensions["code"] = 500
 		}

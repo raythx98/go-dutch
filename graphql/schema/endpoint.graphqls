@@ -3,6 +3,7 @@ type Mutation {
     login(email: String!, password: String!): User!
     addGroup(name: String!): Group! @auth
     addMember(groupId: ID!, email: String!): Group! @auth
+    addRepayment(groupId: ID!, input: RepaymentInput!): Expense! @auth
     addExpense(groupId: ID!, input: ExpenseInput!): Expense! @auth
     editExpense(expenseId: ID!, input: ExpenseInput!): Expense! @auth
     deleteExpense(expenseId: ID!): Boolean! @auth

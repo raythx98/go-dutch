@@ -15,8 +15,8 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/raythx98/go-dutch/graphql/model"
+	"github.com/shopspring/decimal"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -65,6 +65,7 @@ type ComplexityRoot struct {
 		ID        func(childComplexity int) int
 		Payers    func(childComplexity int) int
 		Shares    func(childComplexity int) int
+		Type      func(childComplexity int) int
 	}
 
 	ExpenseSummary struct {
@@ -83,15 +84,17 @@ type ComplexityRoot struct {
 		AddExpense    func(childComplexity int, groupID int64, input model.ExpenseInput) int
 		AddGroup      func(childComplexity int, name string) int
 		AddMember     func(childComplexity int, groupID int64, email string) int
+		AddRepayment  func(childComplexity int, groupID int64, input model.RepaymentInput) int
 		DeleteExpense func(childComplexity int, expenseID int64) int
 		EditExpense   func(childComplexity int, expenseID int64, input model.ExpenseInput) int
 		Login         func(childComplexity int, email string, password string) int
 		Register      func(childComplexity int, email string, password string, username string) int
 	}
 
-	OweDetail struct {
-		Amount func(childComplexity int) int
-		User   func(childComplexity int) int
+	Owe struct {
+		Amount   func(childComplexity int) int
+		Currency func(childComplexity int) int
+		User     func(childComplexity int) int
 	}
 
 	Query struct {
@@ -122,6 +125,7 @@ type MutationResolver interface {
 	Login(ctx context.Context, email string, password string) (*model.User, error)
 	AddGroup(ctx context.Context, name string) (*model.Group, error)
 	AddMember(ctx context.Context, groupID int64, email string) (*model.Group, error)
+	AddRepayment(ctx context.Context, groupID int64, input model.RepaymentInput) (*model.Expense, error)
 	AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error)
 	EditExpense(ctx context.Context, expenseID int64, input model.ExpenseInput) (*model.Expense, error)
 	DeleteExpense(ctx context.Context, expenseID int64) (bool, error)
@@ -216,6 +220,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Expense.Shares(childComplexity), true
+	case "Expense.type":
+		if e.complexity.Expense.Type == nil {
+			break
+		}
+
+		return e.complexity.Expense.Type(childComplexity), true
 
 	case "ExpenseSummary.expenses":
 		if e.complexity.ExpenseSummary.Expenses == nil {
@@ -288,6 +298,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.AddMember(childComplexity, args["groupId"].(int64), args["email"].(string)), true
+	case "Mutation.addRepayment":
+		if e.complexity.Mutation.AddRepayment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addRepayment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddRepayment(childComplexity, args["groupId"].(int64), args["input"].(model.RepaymentInput)), true
 	case "Mutation.deleteExpense":
 		if e.complexity.Mutation.DeleteExpense == nil {
 			break
@@ -333,18 +354,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.Register(childComplexity, args["email"].(string), args["password"].(string), args["username"].(string)), true
 
-	case "OweDetail.amount":
-		if e.complexity.OweDetail.Amount == nil {
+	case "Owe.amount":
+		if e.complexity.Owe.Amount == nil {
 			break
 		}
 
-		return e.complexity.OweDetail.Amount(childComplexity), true
-	case "OweDetail.user":
-		if e.complexity.OweDetail.User == nil {
+		return e.complexity.Owe.Amount(childComplexity), true
+	case "Owe.currency":
+		if e.complexity.Owe.Currency == nil {
 			break
 		}
 
-		return e.complexity.OweDetail.User(childComplexity), true
+		return e.complexity.Owe.Currency(childComplexity), true
+	case "Owe.user":
+		if e.complexity.Owe.User == nil {
+			break
+		}
+
+		return e.complexity.Owe.User(childComplexity), true
 
 	case "Query.currencies":
 		if e.complexity.Query.Currencies == nil {
@@ -434,6 +461,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputExpenseInput,
+		ec.unmarshalInputRepaymentInput,
 		ec.unmarshalInputShareInput,
 	)
 	first := true
@@ -613,6 +641,22 @@ func (ec *executionContext) field_Mutation_addMember_args(ctx context.Context, r
 		return nil, err
 	}
 	args["email"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addRepayment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "groupId", ec.unmarshalNID2int64)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNRepaymentInput2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRepaymentInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
 	return args, nil
 }
 
@@ -921,6 +965,35 @@ func (ec *executionContext) fieldContext_Expense_id(_ context.Context, field gra
 	return fc, nil
 }
 
+func (ec *executionContext) _Expense_type(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Expense_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Expense_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Expense",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Expense_amount(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -931,7 +1004,7 @@ func (ec *executionContext) _Expense_amount(ctx context.Context, field graphql.C
 			return obj.Amount, nil
 		},
 		nil,
-		ec.marshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
 		true,
 		true,
 	)
@@ -1114,6 +1187,8 @@ func (ec *executionContext) fieldContext_ExpenseSummary_expenses(_ context.Conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1141,7 +1216,7 @@ func (ec *executionContext) _ExpenseSummary_owes(ctx context.Context, field grap
 			return obj.Owes, nil
 		},
 		nil,
-		ec.marshalNOweDetail2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweDetailᚄ,
+		ec.marshalNOwe2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweᚄ,
 		true,
 		true,
 	)
@@ -1156,11 +1231,13 @@ func (ec *executionContext) fieldContext_ExpenseSummary_owes(_ context.Context, 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "user":
-				return ec.fieldContext_OweDetail_user(ctx, field)
+				return ec.fieldContext_Owe_user(ctx, field)
 			case "amount":
-				return ec.fieldContext_OweDetail_amount(ctx, field)
+				return ec.fieldContext_Owe_amount(ctx, field)
+			case "currency":
+				return ec.fieldContext_Owe_currency(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type OweDetail", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type Owe", field.Name)
 		},
 	}
 	return fc, nil
@@ -1176,7 +1253,7 @@ func (ec *executionContext) _ExpenseSummary_owed(ctx context.Context, field grap
 			return obj.Owed, nil
 		},
 		nil,
-		ec.marshalNOweDetail2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweDetailᚄ,
+		ec.marshalNOwe2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweᚄ,
 		true,
 		true,
 	)
@@ -1191,11 +1268,13 @@ func (ec *executionContext) fieldContext_ExpenseSummary_owed(_ context.Context, 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "user":
-				return ec.fieldContext_OweDetail_user(ctx, field)
+				return ec.fieldContext_Owe_user(ctx, field)
 			case "amount":
-				return ec.fieldContext_OweDetail_amount(ctx, field)
+				return ec.fieldContext_Owe_amount(ctx, field)
+			case "currency":
+				return ec.fieldContext_Owe_currency(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type OweDetail", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type Owe", field.Name)
 		},
 	}
 	return fc, nil
@@ -1518,6 +1597,76 @@ func (ec *executionContext) fieldContext_Mutation_addMember(ctx context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_addRepayment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addRepayment,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().AddRepayment(ctx, fc.Args["groupId"].(int64), fc.Args["input"].(model.RepaymentInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.Expense
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNExpense2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExpense,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addRepayment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
+			case "amount":
+				return ec.fieldContext_Expense_amount(ctx, field)
+			case "currency":
+				return ec.fieldContext_Expense_currency(ctx, field)
+			case "expenseAt":
+				return ec.fieldContext_Expense_expenseAt(ctx, field)
+			case "payers":
+				return ec.fieldContext_Expense_payers(ctx, field)
+			case "shares":
+				return ec.fieldContext_Expense_shares(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addRepayment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_addExpense(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1558,6 +1707,8 @@ func (ec *executionContext) fieldContext_Mutation_addExpense(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1626,6 +1777,8 @@ func (ec *executionContext) fieldContext_Mutation_editExpense(ctx context.Contex
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1708,12 +1861,12 @@ func (ec *executionContext) fieldContext_Mutation_deleteExpense(ctx context.Cont
 	return fc, nil
 }
 
-func (ec *executionContext) _OweDetail_user(ctx context.Context, field graphql.CollectedField, obj *model.OweDetail) (ret graphql.Marshaler) {
+func (ec *executionContext) _Owe_user(ctx context.Context, field graphql.CollectedField, obj *model.Owe) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_OweDetail_user,
+		ec.fieldContext_Owe_user,
 		func(ctx context.Context) (any, error) {
 			return obj.User, nil
 		},
@@ -1724,9 +1877,9 @@ func (ec *executionContext) _OweDetail_user(ctx context.Context, field graphql.C
 	)
 }
 
-func (ec *executionContext) fieldContext_OweDetail_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Owe_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "OweDetail",
+		Object:     "Owe",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -1745,30 +1898,69 @@ func (ec *executionContext) fieldContext_OweDetail_user(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _OweDetail_amount(ctx context.Context, field graphql.CollectedField, obj *model.OweDetail) (ret graphql.Marshaler) {
+func (ec *executionContext) _Owe_amount(ctx context.Context, field graphql.CollectedField, obj *model.Owe) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_OweDetail_amount,
+		ec.fieldContext_Owe_amount,
 		func(ctx context.Context) (any, error) {
 			return obj.Amount, nil
 		},
 		nil,
-		ec.marshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_OweDetail_amount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Owe_amount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "OweDetail",
+		Object:     "Owe",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Decimal does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Owe_currency(ctx context.Context, field graphql.CollectedField, obj *model.Owe) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Owe_currency,
+		func(ctx context.Context) (any, error) {
+			return obj.Currency, nil
+		},
+		nil,
+		ec.marshalNCurrency2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐCurrency,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Owe_currency(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Owe",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Currency_id(ctx, field)
+			case "code":
+				return ec.fieldContext_Currency_code(ctx, field)
+			case "name":
+				return ec.fieldContext_Currency_name(ctx, field)
+			case "symbol":
+				return ec.fieldContext_Currency_symbol(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Currency", field.Name)
 		},
 	}
 	return fc, nil
@@ -2093,7 +2285,7 @@ func (ec *executionContext) _Share_amount(ctx context.Context, field graphql.Col
 			return obj.Amount, nil
 		},
 		nil,
-		ec.marshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
 		true,
 		true,
 	)
@@ -2139,6 +2331,8 @@ func (ec *executionContext) fieldContext_Subscription_expenseAdded(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -2194,6 +2388,8 @@ func (ec *executionContext) fieldContext_Subscription_expenseUpdated(ctx context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -3771,7 +3967,7 @@ func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj 
 		switch k {
 		case "amount":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("amount"))
-			data, err := ec.unmarshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric(ctx, v)
+			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3810,6 +4006,61 @@ func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj 
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRepaymentInput(ctx context.Context, obj any) (model.RepaymentInput, error) {
+	var it model.RepaymentInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"amount", "currencyId", "expenseAt", "debtor", "creditor"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "amount":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("amount"))
+			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Amount = data
+		case "currencyId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("currencyId"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CurrencyID = data
+		case "expenseAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expenseAt"))
+			data, err := ec.unmarshalNTime2timeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpenseAt = data
+		case "debtor":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("debtor"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Debtor = data
+		case "creditor":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("creditor"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Creditor = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputShareInput(ctx context.Context, obj any) (model.ShareInput, error) {
 	var it model.ShareInput
 	asMap := map[string]any{}
@@ -3833,7 +4084,7 @@ func (ec *executionContext) unmarshalInputShareInput(ctx context.Context, obj an
 			it.UserID = data
 		case "amount":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("amount"))
-			data, err := ec.unmarshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric(ctx, v)
+			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3919,6 +4170,11 @@ func (ec *executionContext) _Expense(ctx context.Context, sel ast.SelectionSet, 
 			out.Values[i] = graphql.MarshalString("Expense")
 		case "id":
 			out.Values[i] = ec._Expense_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._Expense_type(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -4115,6 +4371,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "addRepayment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addRepayment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "addExpense":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addExpense(ctx, field)
@@ -4159,24 +4422,29 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 	return out
 }
 
-var oweDetailImplementors = []string{"OweDetail"}
+var oweImplementors = []string{"Owe"}
 
-func (ec *executionContext) _OweDetail(ctx context.Context, sel ast.SelectionSet, obj *model.OweDetail) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, oweDetailImplementors)
+func (ec *executionContext) _Owe(ctx context.Context, sel ast.SelectionSet, obj *model.Owe) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, oweImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("OweDetail")
+			out.Values[i] = graphql.MarshalString("Owe")
 		case "user":
-			out.Values[i] = ec._OweDetail_user(ctx, field, obj)
+			out.Values[i] = ec._Owe_user(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "amount":
-			out.Values[i] = ec._OweDetail_amount(ctx, field, obj)
+			out.Values[i] = ec._Owe_amount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "currency":
+			out.Values[i] = ec._Owe_currency(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -4839,14 +5107,14 @@ func (ec *executionContext) marshalNCurrency2ᚖgithubᚗcomᚋraythx98ᚋgoᚑd
 	return ec._Currency(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric(ctx context.Context, v any) (pgtype.Numeric, error) {
-	res, err := model.UnmarshalPgNumeric(v)
+func (ec *executionContext) unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx context.Context, v any) (decimal.Decimal, error) {
+	res, err := model.UnmarshalDecimal(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNDecimal2githubᚗcomᚋjackcᚋpgxᚋv5ᚋpgtypeᚐNumeric(ctx context.Context, sel ast.SelectionSet, v pgtype.Numeric) graphql.Marshaler {
+func (ec *executionContext) marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx context.Context, sel ast.SelectionSet, v decimal.Decimal) graphql.Marshaler {
 	_ = sel
-	res := model.MarshalPgNumeric(v)
+	res := model.MarshalDecimal(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
@@ -5006,7 +5274,7 @@ func (ec *executionContext) marshalNID2int64(ctx context.Context, sel ast.Select
 	return res
 }
 
-func (ec *executionContext) marshalNOweDetail2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweDetailᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.OweDetail) graphql.Marshaler {
+func (ec *executionContext) marshalNOwe2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Owe) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -5030,7 +5298,7 @@ func (ec *executionContext) marshalNOweDetail2ᚕᚖgithubᚗcomᚋraythx98ᚋgo
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNOweDetail2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweDetail(ctx, sel, v[i])
+			ret[i] = ec.marshalNOwe2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOwe(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -5050,14 +5318,19 @@ func (ec *executionContext) marshalNOweDetail2ᚕᚖgithubᚗcomᚋraythx98ᚋgo
 	return ret
 }
 
-func (ec *executionContext) marshalNOweDetail2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOweDetail(ctx context.Context, sel ast.SelectionSet, v *model.OweDetail) graphql.Marshaler {
+func (ec *executionContext) marshalNOwe2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐOwe(ctx context.Context, sel ast.SelectionSet, v *model.Owe) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._OweDetail(ctx, sel, v)
+	return ec._Owe(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRepaymentInput2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRepaymentInput(ctx context.Context, v any) (model.RepaymentInput, error) {
+	res, err := ec.unmarshalInputRepaymentInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNShare2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐShareᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Share) graphql.Marshaler {

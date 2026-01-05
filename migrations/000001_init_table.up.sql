@@ -1,6 +1,6 @@
 create table if not exists users
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     username   varchar(20) unique                       not null,
     email      varchar(255) unique                      not null,
     password   varchar(255)                             not null,
@@ -10,7 +10,7 @@ create table if not exists users
 
 create table if not exists groups
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     name       varchar(20)                              not null,
     created_at timestamp default timezone('UTC', now()) not null,
     is_deleted boolean   default false                  not null
@@ -18,7 +18,7 @@ create table if not exists groups
 
 create table if not exists user_group
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     user_id    bigint                                   not null,
     group_id   bigint                                   not null,
     created_at timestamp default timezone('UTC', now()) not null,
@@ -30,9 +30,15 @@ create table if not exists user_group
         on delete cascade on update cascade
 );
 
+CREATE INDEX idx_user_group_group_id_not_deleted
+    ON user_group (group_id, user_id) WHERE is_deleted = false;
+
+CREATE INDEX idx_user_group_user_id_not_deleted
+    ON user_group (user_id, group_id) WHERE is_deleted = false;
+
 create table if not exists currencies
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     code       varchar(3)                               not null,
     name       varchar(50)                              not null,
     symbol     varchar(5)                               not null,
@@ -42,8 +48,9 @@ create table if not exists currencies
 
 create table if not exists expenses
 (
-    id          bigserial primary key,
+    id bigserial primary key,
     group_id    bigint                                   not null,
+    type        smallint                                 not null,
     amount      decimal(10, 2)                           not null,
     currency_id bigint                                   not null,
     expense_at  timestamp                                not null,
@@ -55,9 +62,12 @@ create table if not exists expenses
         on delete set null on update cascade
 );
 
+CREATE INDEX idx_expenses_group_order
+    ON expenses (group_id, expense_at DESC) WHERE is_deleted = false;
+
 create table if not exists expense_payers
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     expense_id bigint                                   not null,
     user_id    bigint                                   not null,
     amount     decimal(10, 2)                           not null,
@@ -69,9 +79,11 @@ create table if not exists expense_payers
         on delete cascade on update cascade
 );
 
+CREATE INDEX idx_expense_payers_expense_id ON expense_payers (expense_id);
+
 create table if not exists expense_shares
 (
-    id         bigserial primary key,
+    id bigserial primary key,
     expense_id bigint                                   not null,
     user_id    bigint                                   not null,
     amount     decimal(10, 2)                           not null,
@@ -82,3 +94,5 @@ create table if not exists expense_shares
     constraint fk_user_id foreign key (user_id) references users (id)
         on delete cascade on update cascade
 );
+
+CREATE INDEX idx_expense_shares_expense_id ON expense_shares (expense_id);

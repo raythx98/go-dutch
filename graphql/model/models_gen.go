@@ -5,7 +5,7 @@ package model
 import (
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 type Currency struct {
@@ -16,26 +16,27 @@ type Currency struct {
 }
 
 type Expense struct {
-	ID        int64          `json:"id"`
-	Amount    pgtype.Numeric `json:"amount"`
-	Currency  *Currency      `json:"currency"`
-	ExpenseAt time.Time      `json:"expenseAt"`
-	Payers    []*Share       `json:"payers"`
-	Shares    []*Share       `json:"shares"`
+	ID        int64           `json:"id"`
+	Type      string          `json:"type"`
+	Amount    decimal.Decimal `json:"amount"`
+	Currency  *Currency       `json:"currency"`
+	ExpenseAt time.Time       `json:"expenseAt"`
+	Payers    []*Share        `json:"payers"`
+	Shares    []*Share        `json:"shares"`
 }
 
 type ExpenseInput struct {
-	Amount     pgtype.Numeric `json:"amount"`
-	CurrencyID int64          `json:"currencyId"`
-	ExpenseAt  time.Time      `json:"expenseAt"`
-	Payers     []*ShareInput  `json:"payers"`
-	Shares     []*ShareInput  `json:"shares"`
+	Amount     decimal.Decimal `json:"amount"`
+	CurrencyID int64           `json:"currencyId"`
+	ExpenseAt  time.Time       `json:"expenseAt"`
+	Payers     []*ShareInput   `json:"payers"`
+	Shares     []*ShareInput   `json:"shares"`
 }
 
 type ExpenseSummary struct {
-	Expenses []*Expense   `json:"expenses"`
-	Owes     []*OweDetail `json:"owes"`
-	Owed     []*OweDetail `json:"owed"`
+	Expenses []*Expense `json:"expenses"`
+	Owes     []*Owe     `json:"owes"`
+	Owed     []*Owe     `json:"owed"`
 }
 
 type Group struct {
@@ -47,22 +48,31 @@ type Group struct {
 type Mutation struct {
 }
 
-type OweDetail struct {
-	User   *User          `json:"user"`
-	Amount pgtype.Numeric `json:"amount"`
+type Owe struct {
+	User     *User           `json:"user"`
+	Amount   decimal.Decimal `json:"amount"`
+	Currency *Currency       `json:"currency"`
 }
 
 type Query struct {
 }
 
+type RepaymentInput struct {
+	Amount     decimal.Decimal `json:"amount"`
+	CurrencyID int64           `json:"currencyId"`
+	ExpenseAt  time.Time       `json:"expenseAt"`
+	Debtor     int64           `json:"debtor"`
+	Creditor   int64           `json:"creditor"`
+}
+
 type Share struct {
-	User   *User          `json:"user"`
-	Amount pgtype.Numeric `json:"amount"`
+	User   *User           `json:"user"`
+	Amount decimal.Decimal `json:"amount"`
 }
 
 type ShareInput struct {
-	UserID int64          `json:"userId"`
-	Amount pgtype.Numeric `json:"amount"`
+	UserID int64           `json:"userId"`
+	Amount decimal.Decimal `json:"amount"`
 }
 
 type Subscription struct {

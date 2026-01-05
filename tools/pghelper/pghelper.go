@@ -2,8 +2,9 @@ package pghelper
 
 import (
 	"time"
-	
+
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 func Int8(userId *int64) pgtype.Int8 {
@@ -20,4 +21,16 @@ func Time(time *time.Time) pgtype.Timestamp {
 	}
 
 	return pgtype.Timestamp{Time: *time, Valid: true}
+}
+
+func FromDecimal(d decimal.Decimal) pgtype.Numeric {
+	return pgtype.Numeric{
+		Int:   d.Coefficient(),
+		Exp:   d.Exponent(),
+		Valid: true,
+	}
+}
+
+func Decimal(n pgtype.Numeric) decimal.Decimal {
+	return decimal.NewFromBigInt(n.Int, n.Exp)
 }

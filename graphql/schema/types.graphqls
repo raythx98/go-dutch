@@ -19,17 +19,19 @@ type Group {
 
 type ExpenseSummary {
     expenses: [Expense!]!
-    owes: [OweDetail!]!
-    owed: [OweDetail!]!
+    owes: [Owe!]!
+    owed: [Owe!]!
 }
 
-type OweDetail {
+type Owe {
     user: User!
     amount: Decimal!
+    currency: Currency!
 }
 
 type Expense {
     id: ID!
+    type: String!
     amount: Decimal!
     currency: Currency!
     expenseAt: Time!

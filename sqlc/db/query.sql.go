@@ -27,13 +27,14 @@ func (q *Queries) AddUserToGroup(ctx context.Context, arg AddUserToGroupParams) 
 }
 
 const createExpense = `-- name: CreateExpense :one
-insert into expenses (group_id, amount, currency_id, expense_at)
-values ($1, $2, $3, $4)
-returning id, group_id, amount, currency_id, expense_at, created_at, is_deleted
+insert into expenses (group_id, type, amount, currency_id, expense_at)
+    values ($1, $2, $3, $4, $5)
+        returning id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
 `
 
 type CreateExpenseParams struct {
 	GroupID    int64
+	Type       int16
 	Amount     pgtype.Numeric
 	CurrencyID int64
 	ExpenseAt  pgtype.Timestamp
@@ -42,6 +43,7 @@ type CreateExpenseParams struct {
 func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (Expense, error) {
 	row := q.db.QueryRow(ctx, createExpense,
 		arg.GroupID,
+		arg.Type,
 		arg.Amount,
 		arg.CurrencyID,
 		arg.ExpenseAt,
@@ -50,6 +52,7 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 	err := row.Scan(
 		&i.ID,
 		&i.GroupID,
+		&i.Type,
 		&i.Amount,
 		&i.CurrencyID,
 		&i.ExpenseAt,
@@ -61,8 +64,8 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 
 const createExpensePayer = `-- name: CreateExpensePayer :one
 insert into expense_payers (expense_id, user_id, amount)
-values ($1, $2, $3)
-returning id, expense_id, user_id, amount, created_at
+    values ($1, $2, $3)
+        returning id, expense_id, user_id, amount, created_at
 `
 
 type CreateExpensePayerParams struct {
@@ -86,8 +89,8 @@ func (q *Queries) CreateExpensePayer(ctx context.Context, arg CreateExpensePayer
 
 const createExpenseShare = `-- name: CreateExpenseShare :one
 insert into expense_shares (expense_id, user_id, amount)
-values ($1, $2, $3)
-returning id, expense_id, user_id, amount, created_at
+    values ($1, $2, $3)
+        returning id, expense_id, user_id, amount, created_at
 `
 
 type CreateExpenseShareParams struct {
@@ -111,8 +114,8 @@ func (q *Queries) CreateExpenseShare(ctx context.Context, arg CreateExpenseShare
 
 const createGroup = `-- name: CreateGroup :one
 insert into groups (name)
-values ($1)
-returning id, name, created_at, is_deleted
+    values ($1)
+        returning id, name, created_at, is_deleted
 `
 
 func (q *Queries) CreateGroup(ctx context.Context, name string) (Group, error) {
@@ -129,8 +132,8 @@ func (q *Queries) CreateGroup(ctx context.Context, name string) (Group, error) {
 
 const createUser = `-- name: CreateUser :one
 insert into users (username, email, password)
-values ($1, $2, $3)
-returning id, username, email, password, created_at, is_deleted
+    values ($1, $2, $3)
+        returning id, username, email, password, created_at, is_deleted
 `
 
 type CreateUserParams struct {
@@ -201,7 +204,7 @@ const getCurrenciesByIds = `-- name: GetCurrenciesByIds :many
 select id, code, name, symbol, created_at, is_deleted
 from currencies
 where is_deleted = false
-  and id = ANY ($1::bigint[])
+  and id = ANY ($1:: bigint [])
 `
 
 func (q *Queries) GetCurrenciesByIds(ctx context.Context, dollar_1 []int64) ([]Currency, error) {
@@ -232,7 +235,7 @@ func (q *Queries) GetCurrenciesByIds(ctx context.Context, dollar_1 []int64) ([]C
 }
 
 const getExpense = `-- name: GetExpense :one
-select id, group_id, amount, currency_id, expense_at, created_at, is_deleted
+select id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
 from expenses
 where id = $1
   and is_deleted = false
@@ -244,6 +247,7 @@ func (q *Queries) GetExpense(ctx context.Context, id int64) (Expense, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.GroupID,
+		&i.Type,
 		&i.Amount,
 		&i.CurrencyID,
 		&i.ExpenseAt,
@@ -254,7 +258,7 @@ func (q *Queries) GetExpense(ctx context.Context, id int64) (Expense, error) {
 }
 
 const getExpenses = `-- name: GetExpenses :many
-select id, group_id, amount, currency_id, expense_at, created_at, is_deleted
+select id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
 from expenses
 where group_id = $1
   and is_deleted = false
@@ -273,6 +277,7 @@ func (q *Queries) GetExpenses(ctx context.Context, groupID int64) ([]Expense, er
 		if err := rows.Scan(
 			&i.ID,
 			&i.GroupID,
+			&i.Type,
 			&i.Amount,
 			&i.CurrencyID,
 			&i.ExpenseAt,
@@ -292,7 +297,7 @@ func (q *Queries) GetExpenses(ctx context.Context, groupID int64) ([]Expense, er
 const getExpensesPayers = `-- name: GetExpensesPayers :many
 SELECT id, expense_id, user_id, amount, created_at
 FROM expense_payers
-WHERE expense_id = ANY ($1::bigint[])
+WHERE expense_id = ANY ($1:: bigint [])
 `
 
 func (q *Queries) GetExpensesPayers(ctx context.Context, dollar_1 []int64) ([]ExpensePayer, error) {
@@ -324,7 +329,7 @@ func (q *Queries) GetExpensesPayers(ctx context.Context, dollar_1 []int64) ([]Ex
 const getExpensesShares = `-- name: GetExpensesShares :many
 SELECT id, expense_id, user_id, amount, created_at
 FROM expense_shares
-WHERE expense_id = ANY ($1::bigint[])
+WHERE expense_id = ANY ($1:: bigint [])
 `
 
 func (q *Queries) GetExpensesShares(ctx context.Context, dollar_1 []int64) ([]ExpenseShare, error) {
@@ -412,11 +417,9 @@ const getGroupsByUser = `-- name: GetGroupsByUser :many
 select g.id, g.name, g.created_at, g.is_deleted
 from groups g
          join user_group ug on g.id = ug.group_id
-         join user u on ug.user_id = u.id
 where ug.user_id = $1
   and g.is_deleted = false
   and ug.is_deleted = false
-  and u.is_deleted = false
 `
 
 func (q *Queries) GetGroupsByUser(ctx context.Context, userID int64) ([]Group, error) {
@@ -468,8 +471,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 const getUsersByIds = `-- name: GetUsersByIds :many
 select id, username, email, password, created_at, is_deleted
 from users
-where id = ANY ($1::bigint[])
-    and is_deleted = false
+where id = ANY ($1:: bigint [])
+  and is_deleted = false
 `
 
 func (q *Queries) GetUsersByIds(ctx context.Context, dollar_1 []int64) ([]User, error) {

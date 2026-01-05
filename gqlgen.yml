@@ -155,4 +155,4 @@ models:
       - github.com/99designs/gqlgen/graphql.Int64
   Decimal:
     model:
-      - github.com/raythx98/go-dutch/graphql/model.PgNumeric
+      - github.com/raythx98/go-dutch/graphql/model.Decimal

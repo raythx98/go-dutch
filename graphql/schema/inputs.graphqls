@@ -1,3 +1,11 @@
+input RepaymentInput {
+    amount: Decimal!
+    currencyId: ID!
+    expenseAt: Time!
+    debtor: ID!
+    creditor: ID!
+}
+
 input ExpenseInput {
     amount: Decimal!
     currencyId: ID!

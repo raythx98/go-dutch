@@ -5,31 +5,25 @@ import (
 	"io"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
-func MarshalPgNumeric(n pgtype.Numeric) graphql.Marshaler {
+func MarshalDecimal(n decimal.Decimal) graphql.Marshaler {
 	return graphql.WriterFunc(func(w io.Writer) {
-		json, err := n.MarshalJSON()
-		if err != nil {
-			w.Write([]byte("null"))
-			return
-		}
-
-		w.Write(json)
+		w.Write([]byte(n.String()))
 	})
 }
 
-func UnmarshalPgNumeric(v interface{}) (pgtype.Numeric, error) {
+func UnmarshalDecimal(v interface{}) (decimal.Decimal, error) {
 	str, ok := v.(string)
 	if !ok {
-		return pgtype.Numeric{}, fmt.Errorf("decimal must be a string")
+		return decimal.Decimal{}, fmt.Errorf("decimal must be a string")
 	}
 
-	var n pgtype.Numeric
-	if err := n.Scan(str); err != nil {
-		return pgtype.Numeric{}, err
+	amount, err := decimal.NewFromString(str)
+	if err != nil {
+		return decimal.Decimal{}, fmt.Errorf("invalid decimal string: %v", err)
 	}
 
-	return n, nil
+	return amount, nil
 }
