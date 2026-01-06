@@ -28,7 +28,7 @@ format_env:
 	find .envrc && sed 's/^export //' .envrc > .env || true
 
 migrate_up:
-	migrate -database 'postgres://${APP_URLSHORTENER_DBUSERNAME}:${APP_URLSHORTENER_DBPASSWORD}@localhost:${APP_URLSHORTENER_DBPORT}/${APP_URLSHORTENER_DBDEFAULTNAME}?sslmode=disable' -path migrations up
+	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations up
 
 run: allow_direnv build volume network stop db format_env migrate_up
 	docker run -d --rm --name url-shortener-app \
