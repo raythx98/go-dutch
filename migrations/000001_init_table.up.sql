@@ -48,7 +48,7 @@ CREATE INDEX idx_user_group_user_id_not_deleted
 create table if not exists currencies
 (
     id bigserial primary key,
-    code       varchar(3)                               not null,
+    code       varchar(3) unique                        not null,
     name       varchar(50)                              not null,
     symbol     varchar(5)                               not null,
     created_at timestamp default timezone('UTC', now()) not null,

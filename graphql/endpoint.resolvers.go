@@ -96,36 +96,6 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 	}, nil
 }
 
-// PreviewGroup is the resolver for the previewGroup field.
-func (r *mutationResolver) PreviewGroup(ctx context.Context, inviteCode string) (*model.RedactedGroup, error) {
-	group, err := r.DbQuery.GetGroupByInviteToken(ctx, inviteCode)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorhelper.NewAppError(InvalidInviteCode, Messages[InvalidInviteCode], err)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &model.RedactedGroup{
-		Name:    group.Name,
-		Members: make([]*model.User, 0),
-	}
-
-	for _, member := range members {
-		response.Members = append(response.Members, &model.User{
-			ID:   member.ID,
-			Name: member.Username,
-		})
-	}
-
-	return response, nil
-}
-
 // JoinGroup is the resolver for the joinGroup field.
 func (r *mutationResolver) JoinGroup(ctx context.Context, inviteCode string) (*model.Group, error) {
 	group, err := r.DbQuery.GetGroupByInviteToken(ctx, inviteCode)
@@ -517,6 +487,36 @@ func (r *mutationResolver) DeleteExpense(ctx context.Context, expenseID int64) (
 	return true, nil
 }
 
+// PreviewGroup is the resolver for the previewGroup field.
+func (r *queryResolver) PreviewGroup(ctx context.Context, inviteCode string) (*model.RedactedGroup, error) {
+	group, err := r.DbQuery.GetGroupByInviteToken(ctx, inviteCode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorhelper.NewAppError(InvalidInviteCode, Messages[InvalidInviteCode], err)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &model.RedactedGroup{
+		Name:    group.Name,
+		Members: make([]*model.User, 0),
+	}
+
+	for _, member := range members {
+		response.Members = append(response.Members, &model.User{
+			ID:   member.ID,
+			Name: member.Username,
+		})
+	}
+
+	return response, nil
+}
+
 // Groups is the resolver for the groups field.
 func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 	userId := getActionTaker(ctx)
@@ -542,9 +542,10 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 		}
 
 		response = append(response, &model.Group{
-			ID:      group.ID,
-			Name:    group.Name,
-			Members: memberModels,
+			ID:          group.ID,
+			Name:        group.Name,
+			InviteToken: group.InviteToken,
+			Members:     memberModels,
 		})
 	}
 

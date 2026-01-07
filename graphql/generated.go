@@ -93,7 +93,6 @@ type ComplexityRoot struct {
 		EditExpense   func(childComplexity int, expenseID int64, input model.ExpenseInput) int
 		JoinGroup     func(childComplexity int, inviteCode string) int
 		Login         func(childComplexity int, email string, password string) int
-		PreviewGroup  func(childComplexity int, inviteCode string) int
 		Register      func(childComplexity int, email string, password string, username string) int
 	}
 
@@ -104,9 +103,10 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Currencies func(childComplexity int) int
-		Expenses   func(childComplexity int, groupID int64) int
-		Groups     func(childComplexity int) int
+		Currencies   func(childComplexity int) int
+		Expenses     func(childComplexity int, groupID int64) int
+		Groups       func(childComplexity int) int
+		PreviewGroup func(childComplexity int, inviteCode string) int
 	}
 
 	RedactedGroup struct {
@@ -134,7 +134,6 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	Register(ctx context.Context, email string, password string, username string) (*model.User, error)
 	Login(ctx context.Context, email string, password string) (*model.User, error)
-	PreviewGroup(ctx context.Context, inviteCode string) (*model.RedactedGroup, error)
 	JoinGroup(ctx context.Context, inviteCode string) (*model.Group, error)
 	AddGroup(ctx context.Context, name string) (*model.Group, error)
 	DeleteGroup(ctx context.Context, groupID int64) (bool, error)
@@ -145,6 +144,7 @@ type MutationResolver interface {
 	DeleteExpense(ctx context.Context, expenseID int64) (bool, error)
 }
 type QueryResolver interface {
+	PreviewGroup(ctx context.Context, inviteCode string) (*model.RedactedGroup, error)
 	Groups(ctx context.Context) ([]*model.Group, error)
 	Expenses(ctx context.Context, groupID int64) (*model.ExpenseSummary, error)
 	Currencies(ctx context.Context) ([]*model.Currency, error)
@@ -396,17 +396,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.Login(childComplexity, args["email"].(string), args["password"].(string)), true
-	case "Mutation.previewGroup":
-		if e.complexity.Mutation.PreviewGroup == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_previewGroup_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.PreviewGroup(childComplexity, args["inviteCode"].(string)), true
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
 			break
@@ -461,6 +450,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Groups(childComplexity), true
+	case "Query.previewGroup":
+		if e.complexity.Query.PreviewGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Query_previewGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PreviewGroup(childComplexity, args["inviteCode"].(string)), true
 
 	case "RedactedGroup.members":
 		if e.complexity.RedactedGroup.Members == nil {
@@ -803,17 +803,6 @@ func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawAr
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_previewGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inviteCode", ec.unmarshalNString2string)
-	if err != nil {
-		return nil, err
-	}
-	args["inviteCode"] = arg0
-	return args, nil
-}
-
 func (ec *executionContext) field_Mutation_register_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -854,6 +843,17 @@ func (ec *executionContext) field_Query_expenses_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["groupId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_previewGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inviteCode", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["inviteCode"] = arg0
 	return args, nil
 }
 
@@ -1675,66 +1675,6 @@ func (ec *executionContext) fieldContext_Mutation_login(ctx context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_previewGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Mutation_previewGroup,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().PreviewGroup(ctx, fc.Args["inviteCode"].(string))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				if ec.directives.Auth == nil {
-					var zeroVal *model.RedactedGroup
-					return zeroVal, errors.New("directive auth is not implemented")
-				}
-				return ec.directives.Auth(ctx, nil, directive0)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalNRedactedGroup2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRedactedGroup,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Mutation_previewGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "name":
-				return ec.fieldContext_RedactedGroup_name(ctx, field)
-			case "members":
-				return ec.fieldContext_RedactedGroup_members(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type RedactedGroup", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_previewGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Mutation_joinGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2358,6 +2298,66 @@ func (ec *executionContext) fieldContext_Owe_currency(_ context.Context, field g
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Currency", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_previewGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_previewGroup,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().PreviewGroup(ctx, fc.Args["inviteCode"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.RedactedGroup
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNRedactedGroup2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRedactedGroup,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_previewGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_RedactedGroup_name(ctx, field)
+			case "members":
+				return ec.fieldContext_RedactedGroup_members(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type RedactedGroup", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_previewGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4886,13 +4886,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "previewGroup":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_previewGroup(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "joinGroup":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_joinGroup(ctx, field)
@@ -5040,6 +5033,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
+		case "previewGroup":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_previewGroup(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "groups":
 			field := field
 
