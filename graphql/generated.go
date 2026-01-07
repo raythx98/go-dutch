@@ -3958,7 +3958,7 @@ func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"amount", "currencyId", "expenseAt", "payers", "shares"}
+	fieldsInOrder := [...]string{"amount", "type", "currencyId", "expenseAt", "payers", "shares"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -3972,6 +3972,13 @@ func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj 
 				return it, err
 			}
 			it.Amount = data
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
 		case "currencyId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("currencyId"))
 			data, err := ec.unmarshalNID2int64(ctx, v)
@@ -4013,7 +4020,7 @@ func (ec *executionContext) unmarshalInputRepaymentInput(ctx context.Context, ob
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"amount", "currencyId", "expenseAt", "debtor", "creditor"}
+	fieldsInOrder := [...]string{"amount", "type", "currencyId", "expenseAt", "debtor", "creditor"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -4027,6 +4034,13 @@ func (ec *executionContext) unmarshalInputRepaymentInput(ctx context.Context, ob
 				return it, err
 			}
 			it.Amount = data
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
 		case "currencyId":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("currencyId"))
 			data, err := ec.unmarshalNID2int64(ctx, v)

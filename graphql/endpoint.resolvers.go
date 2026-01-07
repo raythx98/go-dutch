@@ -102,7 +102,10 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 
 	qtx := r.DbQuery.WithTx(tx)
 
-	group, err := qtx.CreateGroup(ctx, name)
+	group, err := qtx.CreateGroup(ctx, db.CreateGroupParams{
+		Name:        name,
+		InviteToken: "TODO",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +233,7 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
 		GroupID:    groupID,
-		Type:       ExpenseTypeRepayment,
+		Type:       expenseTypeFromString(input.Type),
 		Amount:     pghelper.FromDecimal(input.Amount),
 		CurrencyID: input.CurrencyID,
 		ExpenseAt:  pghelper.Time(&input.ExpenseAt),
@@ -263,6 +266,7 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 
 	return &model.Expense{
 		ID:     expense.ID,
+		Type:   expenseTypeString(expense.Type),
 		Amount: pghelper.Decimal(expense.Amount),
 		Currency: &model.Currency{
 			ID:     currency.ID,

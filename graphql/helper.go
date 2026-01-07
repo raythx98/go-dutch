@@ -71,7 +71,7 @@ func fetchUsersMap(ctx context.Context, dbQuery *db.Queries, input model.Expense
 func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input model.ExpenseInput, currency db.Currency, usersMap map[int64]db.User) (*model.Expense, error) {
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
 		GroupID:    groupId,
-		Type:       ExpenseTypeGeneric,
+		Type:       expenseTypeFromString(input.Type),
 		Amount:     pghelper.FromDecimal(input.Amount),
 		CurrencyID: input.CurrencyID,
 		ExpenseAt:  pghelper.Time(&input.ExpenseAt),

@@ -27,6 +27,7 @@ type Expense struct {
 
 type ExpenseInput struct {
 	Amount     decimal.Decimal `json:"amount"`
+	Type       string          `json:"type"`
 	CurrencyID int64           `json:"currencyId"`
 	ExpenseAt  time.Time       `json:"expenseAt"`
 	Payers     []*ShareInput   `json:"payers"`
@@ -59,6 +60,7 @@ type Query struct {
 
 type RepaymentInput struct {
 	Amount     decimal.Decimal `json:"amount"`
+	Type       string          `json:"type"`
 	CurrencyID int64           `json:"currencyId"`
 	ExpenseAt  time.Time       `json:"expenseAt"`
 	Debtor     int64           `json:"debtor"`

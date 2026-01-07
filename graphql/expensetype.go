@@ -13,3 +13,12 @@ func expenseTypeString(expenseType int16) string {
 		return "Generic"
 	}
 }
+
+func expenseTypeFromString(expenseTypeStr string) int16 {
+	switch expenseTypeStr {
+	case "Repayment":
+		return ExpenseTypeRepayment
+	default:
+		return ExpenseTypeGeneric
+	}
+}

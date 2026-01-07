@@ -1,5 +1,6 @@
 input RepaymentInput {
     amount: Decimal!
+    type: String!
     currencyId: ID!
     expenseAt: Time!
     debtor: ID!
@@ -8,6 +9,7 @@ input RepaymentInput {
 
 input ExpenseInput {
     amount: Decimal!
+    type: String!
     currencyId: ID!
     expenseAt: Time!
     payers: [ShareInput!]!

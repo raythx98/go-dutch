@@ -18,14 +18,16 @@ type Currency struct {
 }
 
 type Expense struct {
-	ID         int64
-	GroupID    int64
-	Type       int16
-	Amount     pgtype.Numeric
-	CurrencyID int64
-	ExpenseAt  pgtype.Timestamp
-	CreatedAt  pgtype.Timestamp
-	IsDeleted  bool
+	ID          int64
+	GroupID     int64
+	Type        int16
+	Name        string
+	Description string
+	Amount      pgtype.Numeric
+	CurrencyID  int64
+	ExpenseAt   pgtype.Timestamp
+	CreatedAt   pgtype.Timestamp
+	IsDeleted   bool
 }
 
 type ExpensePayer struct {
@@ -45,10 +47,11 @@ type ExpenseShare struct {
 }
 
 type Group struct {
-	ID        int64
-	Name      string
-	CreatedAt pgtype.Timestamp
-	IsDeleted bool
+	ID          int64
+	Name        string
+	InviteToken string
+	CreatedAt   pgtype.Timestamp
+	IsDeleted   bool
 }
 
 type User struct {
@@ -58,6 +61,14 @@ type User struct {
 	Password  string
 	CreatedAt pgtype.Timestamp
 	IsDeleted bool
+}
+
+type UserCurrencyPreference struct {
+	ID         int64
+	UserID     int64
+	CurrencyID int64
+	UseCount   int32
+	CreatedAt  pgtype.Timestamp
 }
 
 type UserGroup struct {

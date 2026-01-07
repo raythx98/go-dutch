@@ -27,23 +27,27 @@ func (q *Queries) AddUserToGroup(ctx context.Context, arg AddUserToGroupParams) 
 }
 
 const createExpense = `-- name: CreateExpense :one
-insert into expenses (group_id, type, amount, currency_id, expense_at)
-    values ($1, $2, $3, $4, $5)
-        returning id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
+insert into expenses (group_id, type, name, description, amount, currency_id, expense_at)
+values ($1, $2, $3, $4, $5, $6, $7)
+returning id, group_id, type, name, description, amount, currency_id, expense_at, created_at, is_deleted
 `
 
 type CreateExpenseParams struct {
-	GroupID    int64
-	Type       int16
-	Amount     pgtype.Numeric
-	CurrencyID int64
-	ExpenseAt  pgtype.Timestamp
+	GroupID     int64
+	Type        int16
+	Name        string
+	Description string
+	Amount      pgtype.Numeric
+	CurrencyID  int64
+	ExpenseAt   pgtype.Timestamp
 }
 
 func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (Expense, error) {
 	row := q.db.QueryRow(ctx, createExpense,
 		arg.GroupID,
 		arg.Type,
+		arg.Name,
+		arg.Description,
 		arg.Amount,
 		arg.CurrencyID,
 		arg.ExpenseAt,
@@ -53,6 +57,8 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 		&i.ID,
 		&i.GroupID,
 		&i.Type,
+		&i.Name,
+		&i.Description,
 		&i.Amount,
 		&i.CurrencyID,
 		&i.ExpenseAt,
@@ -64,8 +70,8 @@ func (q *Queries) CreateExpense(ctx context.Context, arg CreateExpenseParams) (E
 
 const createExpensePayer = `-- name: CreateExpensePayer :one
 insert into expense_payers (expense_id, user_id, amount)
-    values ($1, $2, $3)
-        returning id, expense_id, user_id, amount, created_at
+values ($1, $2, $3)
+returning id, expense_id, user_id, amount, created_at
 `
 
 type CreateExpensePayerParams struct {
@@ -89,8 +95,8 @@ func (q *Queries) CreateExpensePayer(ctx context.Context, arg CreateExpensePayer
 
 const createExpenseShare = `-- name: CreateExpenseShare :one
 insert into expense_shares (expense_id, user_id, amount)
-    values ($1, $2, $3)
-        returning id, expense_id, user_id, amount, created_at
+values ($1, $2, $3)
+returning id, expense_id, user_id, amount, created_at
 `
 
 type CreateExpenseShareParams struct {
@@ -113,17 +119,23 @@ func (q *Queries) CreateExpenseShare(ctx context.Context, arg CreateExpenseShare
 }
 
 const createGroup = `-- name: CreateGroup :one
-insert into groups (name)
-    values ($1)
-        returning id, name, created_at, is_deleted
+insert into groups (name, invite_token)
+values ($1, $2)
+returning id, name, invite_token, created_at, is_deleted
 `
 
-func (q *Queries) CreateGroup(ctx context.Context, name string) (Group, error) {
-	row := q.db.QueryRow(ctx, createGroup, name)
+type CreateGroupParams struct {
+	Name        string
+	InviteToken string
+}
+
+func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error) {
+	row := q.db.QueryRow(ctx, createGroup, arg.Name, arg.InviteToken)
 	var i Group
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.InviteToken,
 		&i.CreatedAt,
 		&i.IsDeleted,
 	)
@@ -132,8 +144,8 @@ func (q *Queries) CreateGroup(ctx context.Context, name string) (Group, error) {
 
 const createUser = `-- name: CreateUser :one
 insert into users (username, email, password)
-    values ($1, $2, $3)
-        returning id, username, email, password, created_at, is_deleted
+values ($1, $2, $3)
+returning id, username, email, password, created_at, is_deleted
 `
 
 type CreateUserParams struct {
@@ -164,6 +176,17 @@ where id = $1
 
 func (q *Queries) DeleteExpense(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteExpense, id)
+	return err
+}
+
+const deleteGroup = `-- name: DeleteGroup :exec
+update groups
+set is_deleted = true
+where id = $1
+`
+
+func (q *Queries) DeleteGroup(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteGroup, id)
 	return err
 }
 
@@ -204,7 +227,7 @@ const getCurrenciesByIds = `-- name: GetCurrenciesByIds :many
 select id, code, name, symbol, created_at, is_deleted
 from currencies
 where is_deleted = false
-  and id = ANY ($1:: bigint [])
+  and id = ANY ($1:: bigint[])
 `
 
 func (q *Queries) GetCurrenciesByIds(ctx context.Context, dollar_1 []int64) ([]Currency, error) {
@@ -235,7 +258,7 @@ func (q *Queries) GetCurrenciesByIds(ctx context.Context, dollar_1 []int64) ([]C
 }
 
 const getExpense = `-- name: GetExpense :one
-select id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
+select id, group_id, type, name, description, amount, currency_id, expense_at, created_at, is_deleted
 from expenses
 where id = $1
   and is_deleted = false
@@ -248,6 +271,8 @@ func (q *Queries) GetExpense(ctx context.Context, id int64) (Expense, error) {
 		&i.ID,
 		&i.GroupID,
 		&i.Type,
+		&i.Name,
+		&i.Description,
 		&i.Amount,
 		&i.CurrencyID,
 		&i.ExpenseAt,
@@ -258,7 +283,7 @@ func (q *Queries) GetExpense(ctx context.Context, id int64) (Expense, error) {
 }
 
 const getExpenses = `-- name: GetExpenses :many
-select id, group_id, type, amount, currency_id, expense_at, created_at, is_deleted
+select id, group_id, type, name, description, amount, currency_id, expense_at, created_at, is_deleted
 from expenses
 where group_id = $1
   and is_deleted = false
@@ -278,6 +303,8 @@ func (q *Queries) GetExpenses(ctx context.Context, groupID int64) ([]Expense, er
 			&i.ID,
 			&i.GroupID,
 			&i.Type,
+			&i.Name,
+			&i.Description,
 			&i.Amount,
 			&i.CurrencyID,
 			&i.ExpenseAt,
@@ -297,7 +324,7 @@ func (q *Queries) GetExpenses(ctx context.Context, groupID int64) ([]Expense, er
 const getExpensesPayers = `-- name: GetExpensesPayers :many
 SELECT id, expense_id, user_id, amount, created_at
 FROM expense_payers
-WHERE expense_id = ANY ($1:: bigint [])
+WHERE expense_id = ANY ($1:: bigint[])
 `
 
 func (q *Queries) GetExpensesPayers(ctx context.Context, dollar_1 []int64) ([]ExpensePayer, error) {
@@ -329,7 +356,7 @@ func (q *Queries) GetExpensesPayers(ctx context.Context, dollar_1 []int64) ([]Ex
 const getExpensesShares = `-- name: GetExpensesShares :many
 SELECT id, expense_id, user_id, amount, created_at
 FROM expense_shares
-WHERE expense_id = ANY ($1:: bigint [])
+WHERE expense_id = ANY ($1:: bigint[])
 `
 
 func (q *Queries) GetExpensesShares(ctx context.Context, dollar_1 []int64) ([]ExpenseShare, error) {
@@ -359,7 +386,7 @@ func (q *Queries) GetExpensesShares(ctx context.Context, dollar_1 []int64) ([]Ex
 }
 
 const getGroup = `-- name: GetGroup :one
-select id, name, created_at, is_deleted
+select id, name, invite_token, created_at, is_deleted
 from groups
 where id = $1
   and is_deleted = false
@@ -371,6 +398,27 @@ func (q *Queries) GetGroup(ctx context.Context, id int64) (Group, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.InviteToken,
+		&i.CreatedAt,
+		&i.IsDeleted,
+	)
+	return i, err
+}
+
+const getGroupByInviteToken = `-- name: GetGroupByInviteToken :one
+select id, name, invite_token, created_at, is_deleted
+from groups
+where invite_token = $1
+  and is_deleted = false
+`
+
+func (q *Queries) GetGroupByInviteToken(ctx context.Context, inviteToken string) (Group, error) {
+	row := q.db.QueryRow(ctx, getGroupByInviteToken, inviteToken)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.InviteToken,
 		&i.CreatedAt,
 		&i.IsDeleted,
 	)
@@ -414,7 +462,7 @@ func (q *Queries) GetGroupMembers(ctx context.Context, groupID int64) ([]User, e
 }
 
 const getGroupsByUser = `-- name: GetGroupsByUser :many
-select g.id, g.name, g.created_at, g.is_deleted
+select g.id, g.name, g.invite_token, g.created_at, g.is_deleted
 from groups g
          join user_group ug on g.id = ug.group_id
 where ug.user_id = $1
@@ -434,8 +482,56 @@ func (q *Queries) GetGroupsByUser(ctx context.Context, userID int64) ([]Group, e
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.InviteToken,
 			&i.CreatedAt,
 			&i.IsDeleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRankedCurrencies = `-- name: GetRankedCurrencies :many
+SELECT c.id,
+       c.code,
+       c.name,
+       c.symbol,
+       COALESCE(ucp.use_count, 0) as preference_count
+FROM currencies c
+         LEFT JOIN user_currency_preferences ucp
+                   ON c.id = ucp.currency_id AND ucp.user_id = $1
+WHERE c.is_deleted = false
+ORDER BY COALESCE(ucp.use_count, 0) DESC, c.name ASC
+`
+
+type GetRankedCurrenciesRow struct {
+	ID              int64
+	Code            string
+	Name            string
+	Symbol          string
+	PreferenceCount int32
+}
+
+func (q *Queries) GetRankedCurrencies(ctx context.Context, userID int64) ([]GetRankedCurrenciesRow, error) {
+	rows, err := q.db.Query(ctx, getRankedCurrencies, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRankedCurrenciesRow
+	for rows.Next() {
+		var i GetRankedCurrenciesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Symbol,
+			&i.PreferenceCount,
 		); err != nil {
 			return nil, err
 		}
@@ -468,10 +564,31 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserByUsernameOrEmail = `-- name: GetUserByUsernameOrEmail :one
+SELECT id, username, email, password, created_at, is_deleted
+FROM users
+WHERE (username = $1 OR email = $1)
+  AND is_deleted = false
+`
+
+func (q *Queries) GetUserByUsernameOrEmail(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsernameOrEmail, username)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.Password,
+		&i.CreatedAt,
+		&i.IsDeleted,
+	)
+	return i, err
+}
+
 const getUsersByIds = `-- name: GetUsersByIds :many
 select id, username, email, password, created_at, is_deleted
 from users
-where id = ANY ($1:: bigint [])
+where id = ANY ($1:: bigint[])
   and is_deleted = false
 `
 
@@ -500,4 +617,32 @@ func (q *Queries) GetUsersByIds(ctx context.Context, dollar_1 []int64) ([]User, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertUserCurrencyPreference = `-- name: UpsertUserCurrencyPreference :one
+INSERT INTO user_currency_preferences (user_id, currency_id, use_count)
+VALUES ($1, $2, 1)
+ON CONFLICT
+    (user_id, currency_id)
+    DO UPDATE
+    SET use_count = user_currency_preferences.use_count + 1
+RETURNING id, user_id, currency_id, use_count, created_at
+`
+
+type UpsertUserCurrencyPreferenceParams struct {
+	UserID     int64
+	CurrencyID int64
+}
+
+func (q *Queries) UpsertUserCurrencyPreference(ctx context.Context, arg UpsertUserCurrencyPreferenceParams) (UserCurrencyPreference, error) {
+	row := q.db.QueryRow(ctx, upsertUserCurrencyPreference, arg.UserID, arg.CurrencyID)
+	var i UserCurrencyPreference
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CurrencyID,
+		&i.UseCount,
+		&i.CreatedAt,
+	)
+	return i, err
 }
