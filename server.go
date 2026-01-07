@@ -95,6 +95,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	queryHandler := middleware.Chain(srv.ServeHTTP, []func(http.HandlerFunc) http.HandlerFunc{
+		middleware.CORS,
 		middleware.AddRequestId,
 		middleware.ReqCtx,
 		middleware.JwtSubject(tools.Jwt),
