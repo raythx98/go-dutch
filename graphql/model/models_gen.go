@@ -63,6 +63,11 @@ type Owe struct {
 type Query struct {
 }
 
+type RedactedGroup struct {
+	Name    string  `json:"name"`
+	Members []*User `json:"members"`
+}
+
 type RepaymentInput struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`

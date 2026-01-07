@@ -93,6 +93,7 @@ type ComplexityRoot struct {
 		EditExpense   func(childComplexity int, expenseID int64, input model.ExpenseInput) int
 		JoinGroup     func(childComplexity int, inviteCode string) int
 		Login         func(childComplexity int, email string, password string) int
+		PreviewGroup  func(childComplexity int, inviteCode string) int
 		Register      func(childComplexity int, email string, password string, username string) int
 	}
 
@@ -106,6 +107,11 @@ type ComplexityRoot struct {
 		Currencies func(childComplexity int) int
 		Expenses   func(childComplexity int, groupID int64) int
 		Groups     func(childComplexity int) int
+	}
+
+	RedactedGroup struct {
+		Members func(childComplexity int) int
+		Name    func(childComplexity int) int
 	}
 
 	Share struct {
@@ -128,6 +134,7 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	Register(ctx context.Context, email string, password string, username string) (*model.User, error)
 	Login(ctx context.Context, email string, password string) (*model.User, error)
+	PreviewGroup(ctx context.Context, inviteCode string) (*model.RedactedGroup, error)
 	JoinGroup(ctx context.Context, inviteCode string) (*model.Group, error)
 	AddGroup(ctx context.Context, name string) (*model.Group, error)
 	DeleteGroup(ctx context.Context, groupID int64) (bool, error)
@@ -389,6 +396,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.Login(childComplexity, args["email"].(string), args["password"].(string)), true
+	case "Mutation.previewGroup":
+		if e.complexity.Mutation.PreviewGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_previewGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.PreviewGroup(childComplexity, args["inviteCode"].(string)), true
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
 			break
@@ -443,6 +461,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Groups(childComplexity), true
+
+	case "RedactedGroup.members":
+		if e.complexity.RedactedGroup.Members == nil {
+			break
+		}
+
+		return e.complexity.RedactedGroup.Members(childComplexity), true
+	case "RedactedGroup.name":
+		if e.complexity.RedactedGroup.Name == nil {
+			break
+		}
+
+		return e.complexity.RedactedGroup.Name(childComplexity), true
 
 	case "Share.amount":
 		if e.complexity.Share.Amount == nil {
@@ -769,6 +800,17 @@ func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawAr
 		return nil, err
 	}
 	args["password"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_previewGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inviteCode", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["inviteCode"] = arg0
 	return args, nil
 }
 
@@ -1627,6 +1669,66 @@ func (ec *executionContext) fieldContext_Mutation_login(ctx context.Context, fie
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_login_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_previewGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_previewGroup,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().PreviewGroup(ctx, fc.Args["inviteCode"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.RedactedGroup
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNRedactedGroup2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRedactedGroup,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_previewGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_RedactedGroup_name(ctx, field)
+			case "members":
+				return ec.fieldContext_RedactedGroup_members(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type RedactedGroup", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_previewGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2529,6 +2631,72 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RedactedGroup_name(ctx context.Context, field graphql.CollectedField, obj *model.RedactedGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RedactedGroup_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RedactedGroup_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RedactedGroup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RedactedGroup_members(ctx context.Context, field graphql.CollectedField, obj *model.RedactedGroup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RedactedGroup_members,
+		func(ctx context.Context) (any, error) {
+			return obj.Members, nil
+		},
+		nil,
+		ec.marshalNUser2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐUserᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RedactedGroup_members(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RedactedGroup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "name":
+				return ec.fieldContext_User_name(ctx, field)
+			case "token":
+				return ec.fieldContext_User_token(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
 	}
 	return fc, nil
@@ -4718,6 +4886,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "previewGroup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_previewGroup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "joinGroup":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_joinGroup(ctx, field)
@@ -4939,6 +5114,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var redactedGroupImplementors = []string{"RedactedGroup"}
+
+func (ec *executionContext) _RedactedGroup(ctx context.Context, sel ast.SelectionSet, obj *model.RedactedGroup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, redactedGroupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RedactedGroup")
+		case "name":
+			out.Values[i] = ec._RedactedGroup_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "members":
+			out.Values[i] = ec._RedactedGroup_members(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5701,6 +5920,20 @@ func (ec *executionContext) marshalNOwe2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutch�
 		return graphql.Null
 	}
 	return ec._Owe(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRedactedGroup2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRedactedGroup(ctx context.Context, sel ast.SelectionSet, v model.RedactedGroup) graphql.Marshaler {
+	return ec._RedactedGroup(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRedactedGroup2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRedactedGroup(ctx context.Context, sel ast.SelectionSet, v *model.RedactedGroup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._RedactedGroup(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNRepaymentInput2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐRepaymentInput(ctx context.Context, v any) (model.RepaymentInput, error) {

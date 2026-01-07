@@ -11,6 +11,11 @@ type User {
     token: String!
 }
 
+type RedactedGroup {
+    name: String!
+    members: [User!]!
+}
+
 type Group {
     id: ID!
     name: String!
