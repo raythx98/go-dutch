@@ -59,13 +59,15 @@ type ComplexityRoot struct {
 	}
 
 	Expense struct {
-		Amount    func(childComplexity int) int
-		Currency  func(childComplexity int) int
-		ExpenseAt func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Payers    func(childComplexity int) int
-		Shares    func(childComplexity int) int
-		Type      func(childComplexity int) int
+		Amount      func(childComplexity int) int
+		Currency    func(childComplexity int) int
+		Description func(childComplexity int) int
+		ExpenseAt   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Payers      func(childComplexity int) int
+		Shares      func(childComplexity int) int
+		Type        func(childComplexity int) int
 	}
 
 	ExpenseSummary struct {
@@ -75,18 +77,21 @@ type ComplexityRoot struct {
 	}
 
 	Group struct {
-		ID      func(childComplexity int) int
-		Members func(childComplexity int) int
-		Name    func(childComplexity int) int
+		ID          func(childComplexity int) int
+		InviteToken func(childComplexity int) int
+		Members     func(childComplexity int) int
+		Name        func(childComplexity int) int
 	}
 
 	Mutation struct {
 		AddExpense    func(childComplexity int, groupID int64, input model.ExpenseInput) int
 		AddGroup      func(childComplexity int, name string) int
-		AddMember     func(childComplexity int, groupID int64, email string) int
+		AddMember     func(childComplexity int, groupID int64, identifier string) int
 		AddRepayment  func(childComplexity int, groupID int64, input model.RepaymentInput) int
 		DeleteExpense func(childComplexity int, expenseID int64) int
+		DeleteGroup   func(childComplexity int, groupID int64) int
 		EditExpense   func(childComplexity int, expenseID int64, input model.ExpenseInput) int
+		JoinGroup     func(childComplexity int, inviteCode string) int
 		Login         func(childComplexity int, email string, password string) int
 		Register      func(childComplexity int, email string, password string, username string) int
 	}
@@ -123,8 +128,10 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	Register(ctx context.Context, email string, password string, username string) (*model.User, error)
 	Login(ctx context.Context, email string, password string) (*model.User, error)
+	JoinGroup(ctx context.Context, inviteCode string) (*model.Group, error)
 	AddGroup(ctx context.Context, name string) (*model.Group, error)
-	AddMember(ctx context.Context, groupID int64, email string) (*model.Group, error)
+	DeleteGroup(ctx context.Context, groupID int64) (bool, error)
+	AddMember(ctx context.Context, groupID int64, identifier string) (*model.Group, error)
 	AddRepayment(ctx context.Context, groupID int64, input model.RepaymentInput) (*model.Expense, error)
 	AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error)
 	EditExpense(ctx context.Context, expenseID int64, input model.ExpenseInput) (*model.Expense, error)
@@ -196,6 +203,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Expense.Currency(childComplexity), true
+	case "Expense.description":
+		if e.complexity.Expense.Description == nil {
+			break
+		}
+
+		return e.complexity.Expense.Description(childComplexity), true
 	case "Expense.expenseAt":
 		if e.complexity.Expense.ExpenseAt == nil {
 			break
@@ -208,6 +221,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Expense.ID(childComplexity), true
+	case "Expense.name":
+		if e.complexity.Expense.Name == nil {
+			break
+		}
+
+		return e.complexity.Expense.Name(childComplexity), true
 	case "Expense.payers":
 		if e.complexity.Expense.Payers == nil {
 			break
@@ -252,6 +271,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Group.ID(childComplexity), true
+	case "Group.inviteToken":
+		if e.complexity.Group.InviteToken == nil {
+			break
+		}
+
+		return e.complexity.Group.InviteToken(childComplexity), true
 	case "Group.members":
 		if e.complexity.Group.Members == nil {
 			break
@@ -297,7 +322,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.AddMember(childComplexity, args["groupId"].(int64), args["email"].(string)), true
+		return e.complexity.Mutation.AddMember(childComplexity, args["groupId"].(int64), args["identifier"].(string)), true
 	case "Mutation.addRepayment":
 		if e.complexity.Mutation.AddRepayment == nil {
 			break
@@ -320,6 +345,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.DeleteExpense(childComplexity, args["expenseId"].(int64)), true
+	case "Mutation.deleteGroup":
+		if e.complexity.Mutation.DeleteGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteGroup(childComplexity, args["groupId"].(int64)), true
 	case "Mutation.editExpense":
 		if e.complexity.Mutation.EditExpense == nil {
 			break
@@ -331,6 +367,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.EditExpense(childComplexity, args["expenseId"].(int64), args["input"].(model.ExpenseInput)), true
+	case "Mutation.joinGroup":
+		if e.complexity.Mutation.JoinGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_joinGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.JoinGroup(childComplexity, args["inviteCode"].(string)), true
 	case "Mutation.login":
 		if e.complexity.Mutation.Login == nil {
 			break
@@ -636,11 +683,11 @@ func (ec *executionContext) field_Mutation_addMember_args(ctx context.Context, r
 		return nil, err
 	}
 	args["groupId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "email", ec.unmarshalNString2string)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "identifier", ec.unmarshalNString2string)
 	if err != nil {
 		return nil, err
 	}
-	args["email"] = arg1
+	args["identifier"] = arg1
 	return args, nil
 }
 
@@ -671,6 +718,17 @@ func (ec *executionContext) field_Mutation_deleteExpense_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "groupId", ec.unmarshalNID2int64)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_editExpense_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -684,6 +742,17 @@ func (ec *executionContext) field_Mutation_editExpense_args(ctx context.Context,
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_joinGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "inviteCode", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["inviteCode"] = arg0
 	return args, nil
 }
 
@@ -994,6 +1063,64 @@ func (ec *executionContext) fieldContext_Expense_type(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Expense_name(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Expense_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Expense_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Expense",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Expense_description(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Expense_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Expense_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Expense",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Expense_amount(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1189,6 +1316,10 @@ func (ec *executionContext) fieldContext_ExpenseSummary_expenses(_ context.Conte
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1338,6 +1469,35 @@ func (ec *executionContext) fieldContext_Group_name(_ context.Context, field gra
 	return fc, nil
 }
 
+func (ec *executionContext) _Group_inviteToken(ctx context.Context, field graphql.CollectedField, obj *model.Group) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Group_inviteToken,
+		func(ctx context.Context) (any, error) {
+			return obj.InviteToken, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Group_inviteToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Group",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Group_members(ctx context.Context, field graphql.CollectedField, obj *model.Group) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1473,6 +1633,70 @@ func (ec *executionContext) fieldContext_Mutation_login(ctx context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_joinGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_joinGroup,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().JoinGroup(ctx, fc.Args["inviteCode"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.Group
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNGroup2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐGroup,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_joinGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Group_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Group_name(ctx, field)
+			case "inviteToken":
+				return ec.fieldContext_Group_inviteToken(ctx, field)
+			case "members":
+				return ec.fieldContext_Group_members(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Group", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_joinGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_addGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1515,6 +1739,8 @@ func (ec *executionContext) fieldContext_Mutation_addGroup(ctx context.Context, 
 				return ec.fieldContext_Group_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Group_name(ctx, field)
+			case "inviteToken":
+				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
 			}
@@ -1535,6 +1761,60 @@ func (ec *executionContext) fieldContext_Mutation_addGroup(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_deleteGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteGroup,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().DeleteGroup(ctx, fc.Args["groupId"].(int64))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal bool
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_addMember(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1543,7 +1823,7 @@ func (ec *executionContext) _Mutation_addMember(ctx context.Context, field graph
 		ec.fieldContext_Mutation_addMember,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().AddMember(ctx, fc.Args["groupId"].(int64), fc.Args["email"].(string))
+			return ec.resolvers.Mutation().AddMember(ctx, fc.Args["groupId"].(int64), fc.Args["identifier"].(string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -1577,6 +1857,8 @@ func (ec *executionContext) fieldContext_Mutation_addMember(ctx context.Context,
 				return ec.fieldContext_Group_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Group_name(ctx, field)
+			case "inviteToken":
+				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
 			}
@@ -1639,6 +1921,10 @@ func (ec *executionContext) fieldContext_Mutation_addRepayment(ctx context.Conte
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1709,6 +1995,10 @@ func (ec *executionContext) fieldContext_Mutation_addExpense(ctx context.Context
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -1779,6 +2069,10 @@ func (ec *executionContext) fieldContext_Mutation_editExpense(ctx context.Contex
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -2007,6 +2301,8 @@ func (ec *executionContext) fieldContext_Query_groups(_ context.Context, field g
 				return ec.fieldContext_Group_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Group_name(ctx, field)
+			case "inviteToken":
+				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
 			}
@@ -2333,6 +2629,10 @@ func (ec *executionContext) fieldContext_Subscription_expenseAdded(ctx context.C
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -2390,6 +2690,10 @@ func (ec *executionContext) fieldContext_Subscription_expenseUpdated(ctx context
 				return ec.fieldContext_Expense_id(ctx, field)
 			case "type":
 				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
 			case "amount":
 				return ec.fieldContext_Expense_amount(ctx, field)
 			case "currency":
@@ -3958,13 +4262,27 @@ func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"amount", "type", "currencyId", "expenseAt", "payers", "shares"}
+	fieldsInOrder := [...]string{"name", "description", "amount", "type", "currencyId", "expenseAt", "payers", "shares"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
 		case "amount":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("amount"))
 			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
@@ -4020,13 +4338,27 @@ func (ec *executionContext) unmarshalInputRepaymentInput(ctx context.Context, ob
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"amount", "type", "currencyId", "expenseAt", "debtor", "creditor"}
+	fieldsInOrder := [...]string{"name", "description", "amount", "type", "currencyId", "expenseAt", "debtor", "creditor"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
 		case "amount":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("amount"))
 			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
@@ -4192,6 +4524,16 @@ func (ec *executionContext) _Expense(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "name":
+			out.Values[i] = ec._Expense_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._Expense_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "amount":
 			out.Values[i] = ec._Expense_amount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -4310,6 +4652,11 @@ func (ec *executionContext) _Group(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "inviteToken":
+			out.Values[i] = ec._Group_inviteToken(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "members":
 			out.Values[i] = ec._Group_members(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -4371,9 +4718,23 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "joinGroup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_joinGroup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "addGroup":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addGroup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteGroup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteGroup(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

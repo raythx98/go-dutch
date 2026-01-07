@@ -16,22 +16,26 @@ type Currency struct {
 }
 
 type Expense struct {
-	ID        int64           `json:"id"`
-	Type      string          `json:"type"`
-	Amount    decimal.Decimal `json:"amount"`
-	Currency  *Currency       `json:"currency"`
-	ExpenseAt time.Time       `json:"expenseAt"`
-	Payers    []*Share        `json:"payers"`
-	Shares    []*Share        `json:"shares"`
+	ID          int64           `json:"id"`
+	Type        string          `json:"type"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Amount      decimal.Decimal `json:"amount"`
+	Currency    *Currency       `json:"currency"`
+	ExpenseAt   time.Time       `json:"expenseAt"`
+	Payers      []*Share        `json:"payers"`
+	Shares      []*Share        `json:"shares"`
 }
 
 type ExpenseInput struct {
-	Amount     decimal.Decimal `json:"amount"`
-	Type       string          `json:"type"`
-	CurrencyID int64           `json:"currencyId"`
-	ExpenseAt  time.Time       `json:"expenseAt"`
-	Payers     []*ShareInput   `json:"payers"`
-	Shares     []*ShareInput   `json:"shares"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Amount      decimal.Decimal `json:"amount"`
+	Type        string          `json:"type"`
+	CurrencyID  int64           `json:"currencyId"`
+	ExpenseAt   time.Time       `json:"expenseAt"`
+	Payers      []*ShareInput   `json:"payers"`
+	Shares      []*ShareInput   `json:"shares"`
 }
 
 type ExpenseSummary struct {
@@ -41,9 +45,10 @@ type ExpenseSummary struct {
 }
 
 type Group struct {
-	ID      int64   `json:"id"`
-	Name    string  `json:"name"`
-	Members []*User `json:"members"`
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	InviteToken string  `json:"inviteToken"`
+	Members     []*User `json:"members"`
 }
 
 type Mutation struct {
@@ -59,12 +64,14 @@ type Query struct {
 }
 
 type RepaymentInput struct {
-	Amount     decimal.Decimal `json:"amount"`
-	Type       string          `json:"type"`
-	CurrencyID int64           `json:"currencyId"`
-	ExpenseAt  time.Time       `json:"expenseAt"`
-	Debtor     int64           `json:"debtor"`
-	Creditor   int64           `json:"creditor"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Amount      decimal.Decimal `json:"amount"`
+	Type        string          `json:"type"`
+	CurrencyID  int64           `json:"currencyId"`
+	ExpenseAt   time.Time       `json:"expenseAt"`
+	Debtor      int64           `json:"debtor"`
+	Creditor    int64           `json:"creditor"`
 }
 
 type Share struct {

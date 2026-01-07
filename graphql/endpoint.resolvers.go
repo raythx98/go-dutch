@@ -15,6 +15,7 @@ import (
 	"github.com/raythx98/go-dutch/graphql/model"
 	"github.com/raythx98/go-dutch/sqlc/db"
 	"github.com/raythx98/go-dutch/tools/pghelper"
+	"github.com/raythx98/go-dutch/tools/randstr"
 	"github.com/raythx98/gohelpme/errorhelper"
 	"github.com/raythx98/gohelpme/tool/logger"
 	"github.com/shopspring/decimal"
@@ -25,6 +26,14 @@ func (r *mutationResolver) Register(ctx context.Context, email string, password 
 	_, err := r.DbQuery.GetUserByEmail(ctx, email)
 	if err == nil {
 		return nil, errorhelper.NewAppError(EmailAlreadyRegistered, Messages[EmailAlreadyRegistered], err)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	_, err = r.DbQuery.GetUserByUsername(ctx, username)
+	if err == nil {
+		return nil, errorhelper.NewAppError(UsernameAlreadyRegistered, Messages[UsernameAlreadyRegistered], err)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
@@ -87,6 +96,48 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 	}, nil
 }
 
+// JoinGroup is the resolver for the joinGroup field.
+func (r *mutationResolver) JoinGroup(ctx context.Context, inviteCode string) (*model.Group, error) {
+	group, err := r.DbQuery.GetGroupByInviteToken(ctx, inviteCode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorhelper.NewAppError(InvalidInviteCode, Messages[InvalidInviteCode], err)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	userId := getActionTaker(ctx)
+
+	err = r.DbQuery.AddUserToGroup(ctx, db.AddUserToGroupParams{
+		UserID:  userId,
+		GroupID: group.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &model.Group{
+		ID:          group.ID,
+		Name:        group.Name,
+		InviteToken: group.InviteToken,
+		Members:     make([]*model.User, 0),
+	}
+
+	for _, member := range members {
+		response.Members = append(response.Members, &model.User{
+			ID:   member.ID,
+			Name: member.Username,
+		})
+	}
+
+	return response, nil
+}
+
 // AddGroup is the resolver for the addGroup field.
 func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Group, error) {
 	tx, err := r.Db.Pool().Begin(ctx)
@@ -104,7 +155,7 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 
 	group, err := qtx.CreateGroup(ctx, db.CreateGroupParams{
 		Name:        name,
-		InviteToken: "TODO",
+		InviteToken: randstr.Generate(10),
 	})
 	if err != nil {
 		return nil, err
@@ -128,9 +179,10 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 	}
 
 	response := &model.Group{
-		ID:      group.ID,
-		Name:    group.Name,
-		Members: make([]*model.User, 0),
+		ID:          group.ID,
+		Name:        group.Name,
+		InviteToken: group.InviteToken,
+		Members:     make([]*model.User, 0),
 	}
 
 	for _, member := range members {
@@ -143,8 +195,25 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 	return response, nil
 }
 
+// DeleteGroup is the resolver for the deleteGroup field.
+func (r *mutationResolver) DeleteGroup(ctx context.Context, groupID int64) (bool, error) {
+	userId := getActionTaker(ctx)
+
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
+	if err != nil {
+		return false, err
+	}
+
+	err = r.DbQuery.DeleteGroup(ctx, groupID)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // AddMember is the resolver for the addMember field.
-func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, email string) (*model.Group, error) {
+func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, identifier string) (*model.Group, error) {
 	userId := getActionTaker(ctx)
 
 	group, err := r.DbQuery.GetGroup(ctx, groupID)
@@ -157,7 +226,7 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, email s
 		return nil, err
 	}
 
-	user, err := r.DbQuery.GetUserByEmail(ctx, email)
+	user, err := r.DbQuery.GetUserByUsernameOrEmail(ctx, identifier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorhelper.NewAppError(UserDoesNotExist, Messages[UserDoesNotExist], err)
 	}
@@ -232,11 +301,13 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 	qtx := r.DbQuery.WithTx(tx)
 
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
-		GroupID:    groupID,
-		Type:       expenseTypeFromString(input.Type),
-		Amount:     pghelper.FromDecimal(input.Amount),
-		CurrencyID: input.CurrencyID,
-		ExpenseAt:  pghelper.Time(&input.ExpenseAt),
+		GroupID:     groupID,
+		Type:        expenseTypeFromString(input.Type),
+		Name:        input.Name,
+		Description: input.Description,
+		Amount:      pghelper.FromDecimal(input.Amount),
+		CurrencyID:  input.CurrencyID,
+		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
 	})
 	if err != nil {
 		return nil, err
@@ -265,9 +336,11 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 	}
 
 	return &model.Expense{
-		ID:     expense.ID,
-		Type:   expenseTypeString(expense.Type),
-		Amount: pghelper.Decimal(expense.Amount),
+		ID:          expense.ID,
+		Type:        expenseTypeString(expense.Type),
+		Name:        expense.Name,
+		Description: expense.Description,
+		Amount:      pghelper.Decimal(expense.Amount),
 		Currency: &model.Currency{
 			ID:     currency.ID,
 			Code:   currency.Code,
@@ -334,6 +407,8 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+
+	go updateCurrencyPreference(r.DbQuery, r.Log, getActionTaker(ctx), input.CurrencyID)
 
 	return response, nil
 }
@@ -531,9 +606,11 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 	}
 	for _, expense := range expenses {
 		expenseModel := &model.Expense{
-			ID:     expense.ID,
-			Type:   expenseTypeString(expense.Type),
-			Amount: pghelper.Decimal(expense.Amount),
+			ID:          expense.ID,
+			Type:        expenseTypeString(expense.Type),
+			Name:        expense.Name,
+			Description: expense.Description,
+			Amount:      pghelper.Decimal(expense.Amount),
 			Currency: &model.Currency{
 				ID:     currencyMap[expense.CurrencyID].ID,
 				Code:   currencyMap[expense.CurrencyID].Code,
@@ -673,7 +750,8 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 // Currencies is the resolver for the currencies field.
 func (r *queryResolver) Currencies(ctx context.Context) ([]*model.Currency, error) {
-	currencies, err := r.DbQuery.GetCurrencies(ctx)
+	userId := getActionTaker(ctx)
+	currencies, err := r.DbQuery.GetRankedCurrencies(ctx, userId)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,6 @@
 input RepaymentInput {
+    name: String!
+    description: String!
     amount: Decimal!
     type: String!
     currencyId: ID!
@@ -8,6 +10,8 @@ input RepaymentInput {
 }
 
 input ExpenseInput {
+    name: String!
+    description: String!
     amount: Decimal!
     type: String!
     currencyId: ID!

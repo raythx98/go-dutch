@@ -14,6 +14,7 @@ type User {
 type Group {
     id: ID!
     name: String!
+    inviteToken: String!
     members: [User!]!
 }
 
@@ -32,6 +33,8 @@ type Owe {
 type Expense {
     id: ID!
     type: String!
+    name: String!
+    description: String!
     amount: Decimal!
     currency: Currency!
     expenseAt: Time!

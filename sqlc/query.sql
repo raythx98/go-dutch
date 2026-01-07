@@ -1,8 +1,3 @@
--- name: GetCurrencies :many
-select *
-from currencies
-where is_deleted = false;
-
 -- name: GetCurrenciesByIds :many
 select *
 from currencies
@@ -13,6 +8,12 @@ where is_deleted = false
 insert into users (username, email, password)
 values ($1, $2, $3)
 returning *;
+
+-- name: GetUserByUsername :one
+select *
+from users
+where username = $1
+    and is_deleted = false;
 
 -- name: GetUserByEmail :one
 select *

@@ -190,39 +190,6 @@ func (q *Queries) DeleteGroup(ctx context.Context, id int64) error {
 	return err
 }
 
-const getCurrencies = `-- name: GetCurrencies :many
-select id, code, name, symbol, created_at, is_deleted
-from currencies
-where is_deleted = false
-`
-
-func (q *Queries) GetCurrencies(ctx context.Context) ([]Currency, error) {
-	rows, err := q.db.Query(ctx, getCurrencies)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Currency
-	for rows.Next() {
-		var i Currency
-		if err := rows.Scan(
-			&i.ID,
-			&i.Code,
-			&i.Name,
-			&i.Symbol,
-			&i.CreatedAt,
-			&i.IsDeleted,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getCurrenciesByIds = `-- name: GetCurrenciesByIds :many
 select id, code, name, symbol, created_at, is_deleted
 from currencies
@@ -552,6 +519,27 @@ where email = $1
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.Password,
+		&i.CreatedAt,
+		&i.IsDeleted,
+	)
+	return i, err
+}
+
+const getUserByUsername = `-- name: GetUserByUsername :one
+select id, username, email, password, created_at, is_deleted
+from users
+where username = $1
+    and is_deleted = false
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
 	err := row.Scan(
 		&i.ID,

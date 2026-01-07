@@ -1,8 +1,10 @@
 type Mutation {
     register(email: String!, password: String!, username: String!): User!
     login(email: String!, password: String!): User!
+    joinGroup(inviteCode: String!): Group! @auth
     addGroup(name: String!): Group! @auth
-    addMember(groupId: ID!, email: String!): Group! @auth
+    deleteGroup(groupId: ID!): Boolean! @auth
+    addMember(groupId: ID!, identifier: String!): Group! @auth
     addRepayment(groupId: ID!, input: RepaymentInput!): Expense! @auth
     addExpense(groupId: ID!, input: ExpenseInput!): Expense! @auth
     editExpense(expenseId: ID!, input: ExpenseInput!): Expense! @auth

@@ -3,11 +3,13 @@ package graphql
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/raythx98/go-dutch/graphql/model"
 	"github.com/raythx98/go-dutch/sqlc/db"
 	"github.com/raythx98/go-dutch/tools/pghelper"
 	"github.com/raythx98/gohelpme/errorhelper"
+	"github.com/raythx98/gohelpme/tool/logger"
 	"github.com/raythx98/gohelpme/tool/reqctx"
 	"github.com/shopspring/decimal"
 )
@@ -70,20 +72,24 @@ func fetchUsersMap(ctx context.Context, dbQuery *db.Queries, input model.Expense
 
 func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input model.ExpenseInput, currency db.Currency, usersMap map[int64]db.User) (*model.Expense, error) {
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
-		GroupID:    groupId,
-		Type:       expenseTypeFromString(input.Type),
-		Amount:     pghelper.FromDecimal(input.Amount),
-		CurrencyID: input.CurrencyID,
-		ExpenseAt:  pghelper.Time(&input.ExpenseAt),
+		GroupID:     groupId,
+		Type:        expenseTypeFromString(input.Type),
+		Name:        input.Name,
+		Description: input.Description,
+		Amount:      pghelper.FromDecimal(input.Amount),
+		CurrencyID:  input.CurrencyID,
+		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	response := &model.Expense{
-		ID:     expense.ID,
-		Type:   expenseTypeString(expense.Type),
-		Amount: pghelper.Decimal(expense.Amount),
+		ID:          expense.ID,
+		Type:        expenseTypeString(expense.Type),
+		Name:        expense.Name,
+		Description: expense.Description,
+		Amount:      pghelper.Decimal(expense.Amount),
 		Currency: &model.Currency{
 			ID:     currency.ID,
 			Code:   currency.Code,
@@ -166,4 +172,17 @@ func sortBalanceDesc(a, b balance) int {
 		return 1
 	}
 	return 0
+}
+
+func updateCurrencyPreference(dbQuery *db.Queries, log logger.ILogger, userId int64, currencyId int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := dbQuery.UpsertUserCurrencyPreference(ctx, db.UpsertUserCurrencyPreferenceParams{
+		UserID:     userId,
+		CurrencyID: currencyId,
+	})
+	if err != nil {
+		log.Error(ctx, "failed to update currency preference", logger.WithError(err))
+	}
 }
