@@ -14,6 +14,7 @@ type Mutation {
 type Query {
     previewGroup(inviteCode: String!): RedactedGroup! @auth
     groups: [Group!]! @auth
+    group(groupId: ID!): Group! @auth
     expenses(groupId: ID!): ExpenseSummary! @auth
     currencies: [Currency!]! @auth
 }

@@ -1,0 +1,95 @@
+name: Deploy to Amazon EC2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-to-ec2
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.24.0'
+
+      - name: Build project
+        run: go build ./...
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Install Docker on AWS (if missing)
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            if ! command -v docker &> /dev/null
+            then
+              sudo dnf update -y
+              sudo dnf install -y docker
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -aG docker $USER
+            fi
+            
+            # Check for docker compose plugin (standard in newer Amazon Linux 2023)
+            if ! docker compose version &> /dev/null
+            then
+              sudo dnf install -y docker-compose-plugin
+            fi
+          EOF
+
+      - name: Clone and Deploy
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            PROJECT_DIR="/home/${{ secrets.EC2_USER }}/go-dutch"
+            
+            if [ -d "$PROJECT_DIR" ]; then
+              cd "$PROJECT_DIR"
+              git pull
+            else
+              git clone https://github.com/${{ github.repository }}.git "$PROJECT_DIR"
+              cd "$PROJECT_DIR"
+            fi
+            
+            # Create .env file for Docker Compose
+            echo "APP_GODUTCH_STAGE=production" > .env
+            echo "APP_GODUTCH_DEBUG=false" >> .env
+            echo "APP_GODUTCH_SERVERPORT=8080" >> .env
+            echo "APP_GODUTCH_DBUSERNAME=postgres" >> .env
+            echo "APP_GODUTCH_DBPASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            echo "APP_GODUTCH_DBHOST=db" >> .env
+            echo "APP_GODUTCH_DBPORT=5432" >> .env
+            echo "APP_GODUTCH_DBDEFAULTNAME=godutch" >> .env
+            echo "APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}" >> .env
+            
+            # Run docker compose
+            docker compose up -d --build
+            
+            # Run migrations (assuming golang-migrate is available or run via docker)
+            # For simplicity, we can use a temporary container to run migrations
+            docker run --rm -v $(pwd)/migrations:/migrations --network go-dutch_default migrate/migrate \
+              -path=/migrations/ \
+              -database "postgres://postgres:${{ secrets.DB_PASSWORD }}@db:5432/godutch?sslmode=disable" up
+            
+            # Cleanup unused images
+            docker image prune -f
+          EOF

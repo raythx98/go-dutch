@@ -466,6 +466,23 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 	return response, nil
 }
 
+// Group is the resolver for the group field.
+func (r *queryResolver) Group(ctx context.Context, groupID int64) (*model.Group, error) {
+	userId := getActionTaker(ctx)
+
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	group, err := r.DbQuery.GetGroup(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toGroupModel(group), nil
+}
+
 // Expenses is the resolver for the expenses field.
 func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.ExpenseSummary, error) {
 	userId := getActionTaker(ctx)
