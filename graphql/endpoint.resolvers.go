@@ -10,6 +10,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"time"
 
 	pgx "github.com/jackc/pgx/v5"
 	"github.com/raythx98/go-dutch/graphql/model"
@@ -121,17 +122,32 @@ func (r *mutationResolver) JoinGroup(ctx context.Context, inviteCode string) (*m
 		return nil, err
 	}
 
+	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	response := &model.Group{
-		ID:          group.ID,
-		Name:        group.Name,
-		InviteToken: group.InviteToken,
-		Members:     make([]*model.User, 0),
+		ID:             group.ID,
+		Name:           group.Name,
+		InviteToken:    group.InviteToken,
+		Members:        make([]*model.User, 0),
+		UsedCurrencies: make([]*model.Currency, 0),
 	}
 
 	for _, member := range members {
 		response.Members = append(response.Members, &model.User{
 			ID:   member.ID,
 			Name: member.Username,
+		})
+	}
+
+	for _, currency := range currencies {
+		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
+			ID:     currency.ID,
+			Code:   currency.Code,
+			Name:   currency.Name,
+			Symbol: currency.Symbol,
 		})
 	}
 
@@ -178,17 +194,32 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 		return nil, err
 	}
 
+	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	response := &model.Group{
-		ID:          group.ID,
-		Name:        group.Name,
-		InviteToken: group.InviteToken,
-		Members:     make([]*model.User, 0),
+		ID:             group.ID,
+		Name:           group.Name,
+		InviteToken:    group.InviteToken,
+		Members:        make([]*model.User, 0),
+		UsedCurrencies: make([]*model.Currency, 0),
 	}
 
 	for _, member := range members {
 		response.Members = append(response.Members, &model.User{
 			ID:   member.ID,
 			Name: member.Username,
+		})
+	}
+
+	for _, currency := range currencies {
+		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
+			ID:     currency.ID,
+			Code:   currency.Code,
+			Name:   currency.Name,
+			Symbol: currency.Symbol,
 		})
 	}
 
@@ -242,10 +273,17 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, identif
 		return nil, err
 	}
 
+	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	response := &model.Group{
-		ID:      groupID,
-		Name:    group.Name,
-		Members: make([]*model.User, 0),
+		ID:             groupID,
+		Name:           group.Name,
+		InviteToken:    group.InviteToken,
+		Members:        make([]*model.User, 0),
+		UsedCurrencies: make([]*model.Currency, 0),
 	}
 
 	for _, member := range members {
@@ -258,6 +296,15 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, identif
 		ID:   user.ID,
 		Name: user.Username,
 	})
+
+	for _, currency := range currencies {
+		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
+			ID:     currency.ID,
+			Code:   currency.Code,
+			Name:   currency.Name,
+			Symbol: currency.Symbol,
+		})
+	}
 
 	return response, nil
 }
@@ -300,6 +347,8 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 
 	qtx := r.DbQuery.WithTx(tx)
 
+	now := time.Now()
+
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
 		GroupID:     groupID,
 		Type:        expenseTypeFromString(input.Type),
@@ -308,6 +357,7 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 		Amount:      pghelper.FromDecimal(input.Amount),
 		CurrencyID:  input.CurrencyID,
 		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
+		CreatedAt:   pghelper.Time(&now),
 	})
 	if err != nil {
 		return nil, err
@@ -399,7 +449,8 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 
 	qtx := r.DbQuery.WithTx(tx)
 
-	response, err := createExpense(ctx, qtx, groupID, input, currency, usersMap)
+	now := time.Now()
+	response, err := createExpense(ctx, qtx, groupID, input, currency, usersMap, pghelper.Time(&now))
 	if err != nil {
 		return nil, err
 	}
@@ -407,9 +458,7 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-
-	go updateCurrencyPreference(r.DbQuery, r.Log, getActionTaker(ctx), input.CurrencyID)
-
+	
 	return response, nil
 }
 
@@ -450,7 +499,7 @@ func (r *mutationResolver) EditExpense(ctx context.Context, expenseID int64, inp
 
 	qtx := r.DbQuery.WithTx(tx)
 
-	response, err := createExpense(ctx, qtx, existingExpense.GroupID, input, currency, usersMap)
+	response, err := createExpense(ctx, qtx, existingExpense.GroupID, input, currency, usersMap, existingExpense.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -533,6 +582,11 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 			return nil, err
 		}
 
+		currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
+		if err != nil {
+			return nil, err
+		}
+
 		memberModels := make([]*model.User, 0)
 		for _, member := range members {
 			memberModels = append(memberModels, &model.User{
@@ -541,11 +595,22 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 			})
 		}
 
+		currencyModels := make([]*model.Currency, 0)
+		for _, currency := range currencies {
+			currencyModels = append(currencyModels, &model.Currency{
+				ID:     currency.ID,
+				Code:   currency.Code,
+				Name:   currency.Name,
+				Symbol: currency.Symbol,
+			})
+		}
+
 		response = append(response, &model.Group{
-			ID:          group.ID,
-			Name:        group.Name,
-			InviteToken: group.InviteToken,
-			Members:     memberModels,
+			ID:             group.ID,
+			Name:           group.Name,
+			InviteToken:    group.InviteToken,
+			Members:        memberModels,
+			UsedCurrencies: currencyModels,
 		})
 	}
 
@@ -710,7 +775,14 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 	// Use a greedy algorithm to calculate owed amounts
 	// Match users who are owed the most money with users who owe the most money iteratively
-	for currencyID, userBalances := range balances {
+	sortedCurrencyIDs := make([]int64, 0, len(balances))
+	for currencyID := range balances {
+		sortedCurrencyIDs = append(sortedCurrencyIDs, currencyID)
+	}
+	slices.Sort(sortedCurrencyIDs)
+
+	for _, currencyID := range sortedCurrencyIDs {
+		userBalances := balances[currencyID]
 		creditors := make([]balance, 0)
 		debtors := make([]balance, 0)
 
@@ -733,7 +805,7 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 			amountOwed := decimal.Min(creditor.Amount, debtor.Amount)
 
 			if debtor.UserID == userId {
-				response.Owes = append(response.Owed, &model.Owe{
+				response.Owes = append(response.Owes, &model.Owe{
 					User: &model.User{
 						ID:   creditor.UserID,
 						Name: userMap[creditor.UserID].Username,
@@ -781,8 +853,7 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 // Currencies is the resolver for the currencies field.
 func (r *queryResolver) Currencies(ctx context.Context) ([]*model.Currency, error) {
-	userId := getActionTaker(ctx)
-	currencies, err := r.DbQuery.GetRankedCurrencies(ctx, userId)
+	currencies, err := r.DbQuery.GetCurrencies(ctx)
 	if err != nil {
 		return nil, err
 	}

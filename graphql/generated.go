@@ -77,10 +77,11 @@ type ComplexityRoot struct {
 	}
 
 	Group struct {
-		ID          func(childComplexity int) int
-		InviteToken func(childComplexity int) int
-		Members     func(childComplexity int) int
-		Name        func(childComplexity int) int
+		ID             func(childComplexity int) int
+		InviteToken    func(childComplexity int) int
+		Members        func(childComplexity int) int
+		Name           func(childComplexity int) int
+		UsedCurrencies func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -296,6 +297,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Group.Name(childComplexity), true
+	case "Group.usedCurrencies":
+		if e.complexity.Group.UsedCurrencies == nil {
+			break
+		}
+
+		return e.complexity.Group.UsedCurrencies(childComplexity), true
 
 	case "Mutation.addExpense":
 		if e.complexity.Mutation.AddExpense == nil {
@@ -1577,6 +1584,45 @@ func (ec *executionContext) fieldContext_Group_members(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Group_usedCurrencies(ctx context.Context, field graphql.CollectedField, obj *model.Group) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Group_usedCurrencies,
+		func(ctx context.Context) (any, error) {
+			return obj.UsedCurrencies, nil
+		},
+		nil,
+		ec.marshalNCurrency2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐCurrencyᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Group_usedCurrencies(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Group",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Currency_id(ctx, field)
+			case "code":
+				return ec.fieldContext_Currency_code(ctx, field)
+			case "name":
+				return ec.fieldContext_Currency_name(ctx, field)
+			case "symbol":
+				return ec.fieldContext_Currency_symbol(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Currency", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_register(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1721,6 +1767,8 @@ func (ec *executionContext) fieldContext_Mutation_joinGroup(ctx context.Context,
 				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
+			case "usedCurrencies":
+				return ec.fieldContext_Group_usedCurrencies(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Group", field.Name)
 		},
@@ -1785,6 +1833,8 @@ func (ec *executionContext) fieldContext_Mutation_addGroup(ctx context.Context, 
 				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
+			case "usedCurrencies":
+				return ec.fieldContext_Group_usedCurrencies(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Group", field.Name)
 		},
@@ -1903,6 +1953,8 @@ func (ec *executionContext) fieldContext_Mutation_addMember(ctx context.Context,
 				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
+			case "usedCurrencies":
+				return ec.fieldContext_Group_usedCurrencies(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Group", field.Name)
 		},
@@ -2407,6 +2459,8 @@ func (ec *executionContext) fieldContext_Query_groups(_ context.Context, field g
 				return ec.fieldContext_Group_inviteToken(ctx, field)
 			case "members":
 				return ec.fieldContext_Group_members(ctx, field)
+			case "usedCurrencies":
+				return ec.fieldContext_Group_usedCurrencies(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Group", field.Name)
 		},
@@ -4827,6 +4881,11 @@ func (ec *executionContext) _Group(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "members":
 			out.Values[i] = ec._Group_members(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "usedCurrencies":
+			out.Values[i] = ec._Group_usedCurrencies(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

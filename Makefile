@@ -30,6 +30,9 @@ format_env:
 migrate_up:
 	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations up
 
+migrate_down:
+	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations down
+
 run: allow_direnv build volume network stop db format_env migrate_up
 	docker run -d --rm --name url-shortener-app \
 		--net my-network -p ${APP_GODUTCH_SERVERPORT}:${APP_GODUTCH_SERVERPORT} \

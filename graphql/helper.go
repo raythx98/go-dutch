@@ -3,13 +3,12 @@ package graphql
 import (
 	"context"
 	"slices"
-	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/raythx98/go-dutch/graphql/model"
 	"github.com/raythx98/go-dutch/sqlc/db"
 	"github.com/raythx98/go-dutch/tools/pghelper"
 	"github.com/raythx98/gohelpme/errorhelper"
-	"github.com/raythx98/gohelpme/tool/logger"
 	"github.com/raythx98/gohelpme/tool/reqctx"
 	"github.com/shopspring/decimal"
 )
@@ -70,7 +69,7 @@ func fetchUsersMap(ctx context.Context, dbQuery *db.Queries, input model.Expense
 	return usersMap, nil
 }
 
-func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input model.ExpenseInput, currency db.Currency, usersMap map[int64]db.User) (*model.Expense, error) {
+func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input model.ExpenseInput, currency db.Currency, usersMap map[int64]db.User, createdAt pgtype.Timestamp) (*model.Expense, error) {
 	expense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
 		GroupID:     groupId,
 		Type:        expenseTypeFromString(input.Type),
@@ -79,6 +78,7 @@ func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input mo
 		Amount:      pghelper.FromDecimal(input.Amount),
 		CurrencyID:  input.CurrencyID,
 		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
+		CreatedAt:   createdAt,
 	})
 	if err != nil {
 		return nil, err
@@ -172,17 +172,4 @@ func sortBalanceDesc(a, b balance) int {
 		return 1
 	}
 	return 0
-}
-
-func updateCurrencyPreference(dbQuery *db.Queries, log logger.ILogger, userId int64, currencyId int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := dbQuery.UpsertUserCurrencyPreference(ctx, db.UpsertUserCurrencyPreferenceParams{
-		UserID:     userId,
-		CurrencyID: currencyId,
-	})
-	if err != nil {
-		log.Error(ctx, "failed to update currency preference", logger.WithError(err))
-	}
 }

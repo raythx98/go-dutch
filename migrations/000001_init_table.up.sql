@@ -94,7 +94,7 @@ create table if not exists expenses
 );
 
 CREATE INDEX idx_expenses_group_order
-    ON expenses (group_id, expense_at DESC) WHERE is_deleted = false;
+    ON expenses (group_id, expense_at DESC, created_at DESC) WHERE is_deleted = false;
 
 create table if not exists expense_payers
 (

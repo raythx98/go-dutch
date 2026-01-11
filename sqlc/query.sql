@@ -1,3 +1,9 @@
+-- name: GetCurrencies :many
+select *
+from currencies
+where is_deleted = false
+order by name asc;
+
 -- name: GetCurrenciesByIds :many
 select *
 from currencies
@@ -32,27 +38,6 @@ select *
 from users
 where id = ANY ($1:: bigint[])
   and is_deleted = false;
-
--- name: UpsertUserCurrencyPreference :one
-INSERT INTO user_currency_preferences (user_id, currency_id, use_count)
-VALUES ($1, $2, 1)
-ON CONFLICT
-    (user_id, currency_id)
-    DO UPDATE
-    SET use_count = user_currency_preferences.use_count + 1
-RETURNING *;
-
--- name: GetRankedCurrencies :many
-SELECT c.id,
-       c.code,
-       c.name,
-       c.symbol,
-       COALESCE(ucp.use_count, 0) as preference_count
-FROM currencies c
-         LEFT JOIN user_currency_preferences ucp
-                   ON c.id = ucp.currency_id AND ucp.user_id = $1
-WHERE c.is_deleted = false
-ORDER BY COALESCE(ucp.use_count, 0) DESC, c.name ASC;
 
 -- name: GetGroupMembers :many
 select u.*
@@ -97,8 +82,8 @@ insert into user_group (user_id, group_id)
 values ($1, $2);
 
 -- name: CreateExpense :one
-insert into expenses (group_id, type, name, description, amount, currency_id, expense_at)
-values ($1, $2, $3, $4, $5, $6, $7)
+insert into expenses (group_id, type, name, description, amount, currency_id, expense_at, created_at)
+values ($1, $2, $3, $4, $5, $6, $7, $8)
 returning *;
 
 -- name: CreateExpensePayer :one
@@ -122,7 +107,7 @@ select *
 from expenses
 where group_id = $1
   and is_deleted = false
-order by expense_at desc;
+order by expense_at desc, created_at desc;
 
 -- name: GetExpensesPayers :many
 SELECT *
@@ -138,3 +123,17 @@ WHERE expense_id = ANY ($1:: bigint[]);
 update expenses
 set is_deleted = true
 where id = $1;
+
+-- name: GetGroupCurrencies :many
+SELECT c.id,
+       c.code,
+       c.name,
+       c.symbol,
+       COUNT(e.id) as usage_count
+FROM currencies c
+         JOIN expenses e ON c.id = e.currency_id
+WHERE e.group_id = $1
+  AND e.is_deleted = false
+  AND c.is_deleted = false
+GROUP BY c.id
+ORDER BY usage_count DESC, c.name ASC;

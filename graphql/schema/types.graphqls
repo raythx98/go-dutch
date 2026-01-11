@@ -21,6 +21,7 @@ type Group {
     name: String!
     inviteToken: String!
     members: [User!]!
+    usedCurrencies: [Currency!]!
 }
 
 type ExpenseSummary {

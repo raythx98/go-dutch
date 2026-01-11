@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"runtime/debug"
 
 	"github.com/raythx98/go-dutch/graphql"
+	"github.com/raythx98/go-dutch/middleware/ratelimit"
 	"github.com/raythx98/go-dutch/tools/config"
 	"github.com/raythx98/go-dutch/tools/resources"
 
@@ -25,6 +27,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -94,8 +97,25 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Load Rate Limit Config
+	var rlConfig ratelimit.Config
+	rlFile, err := os.ReadFile("ratelimit.yaml")
+	if err != nil {
+		tools.Log.Warn(ctx, "failed to load ratelimit.yaml, using defaults", logger.WithError(err))
+		rlConfig = ratelimit.Config{
+			Default: ratelimit.RateConfig{Rate: 20, Burst: 50},
+		}
+	} else {
+		if err := yaml.Unmarshal(rlFile, &rlConfig); err != nil {
+			log.Fatalf("failed to parse ratelimit.yaml: %v", err)
+		}
+	}
+
+	rateLimiter := ratelimit.NewRateLimiter(rlConfig, tools.Log)
+
 	queryHandler := middleware.Chain(srv.ServeHTTP, []func(http.HandlerFunc) http.HandlerFunc{
 		middleware.CORS,
+		rateLimiter.Middleware,
 		middleware.AddRequestId,
 		middleware.ReqCtx,
 		middleware.JwtSubject(tools.Jwt),

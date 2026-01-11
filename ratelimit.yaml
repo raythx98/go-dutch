@@ -1,0 +1,14 @@
+default:
+  rate: 1
+  burst: 2
+
+operations:
+  Mutation.register:
+    rate: 1
+    burst: 1
+  Mutation.login:
+    rate: 1
+    burst: 1
+  Query.expenses:
+    rate: 10
+    burst: 20

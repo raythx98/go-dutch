@@ -45,10 +45,11 @@ type ExpenseSummary struct {
 }
 
 type Group struct {
-	ID          int64   `json:"id"`
-	Name        string  `json:"name"`
-	InviteToken string  `json:"inviteToken"`
-	Members     []*User `json:"members"`
+	ID             int64       `json:"id"`
+	Name           string      `json:"name"`
+	InviteToken    string      `json:"inviteToken"`
+	Members        []*User     `json:"members"`
+	UsedCurrencies []*Currency `json:"usedCurrencies"`
 }
 
 type Mutation struct {
