@@ -15,7 +15,7 @@ A modern, lightweight alternative to Splitwise for managing group expenses and s
 - **Database:** PostgreSQL
 - **SQL Generation:** sqlc (Type-safe SQL)
 - **Infrastructure:** Docker, Docker Compose
-- **Deployment:** AWS EC2 + GitHub Actions
+- **Deployment:** Oracle Cloud ARM Compute + GitHub Actions
 
 ## Local Development
 
@@ -54,26 +54,27 @@ A modern, lightweight alternative to Splitwise for managing group expenses and s
    ```
    The API will be available at `http://localhost:8080/query` and the Playground at `http://localhost:8080/`.
 
-## Infrastructure Setup (AWS Free Tier)
+## Infrastructure Setup (OCI ARM Free Tier)
 
 ### 1. GitHub Secrets
 Configure the following in your repository settings:
-- `EC2_HOST`: Public IP of your EC2 instance.
-- `EC2_USER`: Usually `ec2-user`.
-- `SSH_PRIVATE_KEY`: Your `.pem` private key.
+- `OCI_HOST`: Public IP of your Oracle Cloud instance.
+- `OCI_USER`: Default is usually `opc` (Oracle Linux) or `ubuntu`.
+- `SSH_PRIVATE_KEY`: Your private key (ensure it's in OpenSSH format).
 - `DB_PASSWORD`: Password for the production Postgres container.
 - `JWT_SECRET`: Secret for signing JWT tokens.
 
-### 2. EC2 Configuration
-- **Instance:** Amazon Linux 2023 (t2.micro/t3.micro).
-- **Security Group:** Allow SSH (22) and API Traffic (8080).
-- **Swap Space:** Essential for 1GB RAM instances to prevent OOM during builds.
+### 2. OCI Configuration
+- **Instance:** Ampere A1 (ARM64). Oracle offers up to 4 OCPUs and 24 GB of RAM for free.
+- **Security List / VCN:** Allow SSH (22) and API Traffic (8080) in the Ingress Rules.
+- **Firewall (OS level):** Oracle Linux and Ubuntu instances often have `iptables` or `ufw` enabled by default. You may need to open port 8080:
   ```bash
-  sudo dd if=/dev/zero of=/swapfile bs=128M count=16
-  sudo chmod 600 /swapfile
-  sudo mkswap /swapfile
-  sudo swapon /swapfile
-  echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab
+  # For Oracle Linux (firewalld)
+  sudo firewall-cmd --permanent --add-port=8080/tcp
+  sudo firewall-cmd --reload
+  
+  # For Ubuntu (ufw)
+  sudo ufw allow 8080/tcp
   ```
 
 ## API Documentation
