@@ -8,7 +8,7 @@ allow_direnv:
 	direnv allow . || true
 
 build:
-	docker build -t url-shortener .
+	docker build -t go-dutch .
 
 volume:
 	docker volume create local-postgres
@@ -17,9 +17,9 @@ network:
 	docker network create my-network || true
 
 db:
-	docker run -d --rm --name ${APP_URLSHORTENER_DBHOST} \
-		--net my-network -p ${APP_URLSHORTENER_DBPORT}:${APP_URLSHORTENER_DBPORT} \
-		-e POSTGRES_PASSWORD=${APP_URLSHORTENER_DBPASSWORD} \
+	docker run -d --rm --name go-dutch-db \
+		--net my-network -p ${APP_GODUTCH_DBPORT}:${APP_GODUTCH_DBPORT} \
+		-e POSTGRES_PASSWORD=${APP_GODUTCH_DBPASSWORD} \
 		-v local-postgres:/var/lib/postgresql/data \
 		postgres:latest && sleep 5 || true
 
@@ -34,9 +34,9 @@ migrate_down:
 	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations down
 
 run: allow_direnv build volume network stop db format_env migrate_up
-	docker run -d --rm --name url-shortener-app \
+	docker run -d --rm --name go-dutch-app \
 		--net my-network -p ${APP_GODUTCH_SERVERPORT}:${APP_GODUTCH_SERVERPORT} \
-		--env-file .env url-shortener
+		--env-file .env go-dutch
 
 stop_app:
 	docker stop go-dutch-app || true

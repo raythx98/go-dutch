@@ -1,8 +1,6 @@
 package config
 
 import (
-	"strings"
-
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -22,10 +20,6 @@ func Load() *Specification {
 	var s Specification
 	envconfig.MustProcess("APP_GODUTCH", &s)
 	return &s
-}
-
-func (s *Specification) IsDevelopment() bool {
-	return strings.EqualFold(s.Stage, "development")
 }
 
 func (s *Specification) GetHmacSecret() []byte {

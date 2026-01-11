@@ -59,11 +59,10 @@ func (r *mutationResolver) Register(ctx context.Context, email string, password 
 		return nil, err
 	}
 
-	return &model.User{
-		ID:    user.ID,
-		Name:  user.Username,
-		Token: accessToken,
-	}, nil
+	response := toUserModel(user)
+	response.Token = accessToken
+
+	return response, nil
 }
 
 // Login is the resolver for the login field.
@@ -90,11 +89,10 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 		return nil, err
 	}
 
-	return &model.User{
-		ID:    user.ID,
-		Name:  user.Username,
-		Token: accessToken,
-	}, nil
+	response := toUserModel(user)
+	response.Token = accessToken
+
+	return response, nil
 }
 
 // JoinGroup is the resolver for the joinGroup field.
@@ -117,41 +115,7 @@ func (r *mutationResolver) JoinGroup(ctx context.Context, inviteCode string) (*m
 		return nil, err
 	}
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &model.Group{
-		ID:             group.ID,
-		Name:           group.Name,
-		InviteToken:    group.InviteToken,
-		Members:        make([]*model.User, 0),
-		UsedCurrencies: make([]*model.Currency, 0),
-	}
-
-	for _, member := range members {
-		response.Members = append(response.Members, &model.User{
-			ID:   member.ID,
-			Name: member.Username,
-		})
-	}
-
-	for _, currency := range currencies {
-		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		})
-	}
-
-	return response, nil
+	return toGroupModel(group), nil
 }
 
 // AddGroup is the resolver for the addGroup field.
@@ -189,41 +153,7 @@ func (r *mutationResolver) AddGroup(ctx context.Context, name string) (*model.Gr
 		return nil, err
 	}
 
-	members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &model.Group{
-		ID:             group.ID,
-		Name:           group.Name,
-		InviteToken:    group.InviteToken,
-		Members:        make([]*model.User, 0),
-		UsedCurrencies: make([]*model.Currency, 0),
-	}
-
-	for _, member := range members {
-		response.Members = append(response.Members, &model.User{
-			ID:   member.ID,
-			Name: member.Username,
-		})
-	}
-
-	for _, currency := range currencies {
-		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		})
-	}
-
-	return response, nil
+	return toGroupModel(group), nil
 }
 
 // DeleteGroup is the resolver for the deleteGroup field.
@@ -252,7 +182,7 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, identif
 		return nil, err
 	}
 
-	members, err := checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
+	_, err = checkIsGroupMember(ctx, r.DbQuery, groupID, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -273,40 +203,7 @@ func (r *mutationResolver) AddMember(ctx context.Context, groupID int64, identif
 		return nil, err
 	}
 
-	currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	response := &model.Group{
-		ID:             groupID,
-		Name:           group.Name,
-		InviteToken:    group.InviteToken,
-		Members:        make([]*model.User, 0),
-		UsedCurrencies: make([]*model.Currency, 0),
-	}
-
-	for _, member := range members {
-		response.Members = append(response.Members, &model.User{
-			ID:   member.ID,
-			Name: member.Username,
-		})
-	}
-	response.Members = append(response.Members, &model.User{
-		ID:   user.ID,
-		Name: user.Username,
-	})
-
-	for _, currency := range currencies {
-		response.UsedCurrencies = append(response.UsedCurrencies, &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		})
-	}
-
-	return response, nil
+	return toGroupModel(group), nil
 }
 
 // AddRepayment is the resolver for the addRepayment field.
@@ -391,28 +288,17 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 		Name:        expense.Name,
 		Description: expense.Description,
 		Amount:      pghelper.Decimal(expense.Amount),
-		Currency: &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		},
-		ExpenseAt: expense.ExpenseAt.Time,
+		Currency:    toCurrencyModel(currency),
+		ExpenseAt:   expense.ExpenseAt.Time,
 		Payers: []*model.Share{
 			{
-				User: &model.User{
-					ID:   expensePayer.UserID,
-					Name: userMap[expensePayer.UserID].Username,
-				},
+				User:   toUserModel(userMap[expensePayer.UserID]),
 				Amount: pghelper.Decimal(expensePayer.Amount),
 			},
 		},
 		Shares: []*model.Share{
 			{
-				User: &model.User{
-					ID:   expenseSharer.UserID,
-					Name: userMap[expenseSharer.UserID].Username,
-				},
+				User:   toUserModel(userMap[expenseSharer.UserID]),
 				Amount: pghelper.Decimal(expenseSharer.Amount),
 			},
 		},
@@ -458,7 +344,7 @@ func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	
+
 	return response, nil
 }
 
@@ -557,10 +443,7 @@ func (r *queryResolver) PreviewGroup(ctx context.Context, inviteCode string) (*m
 	}
 
 	for _, member := range members {
-		response.Members = append(response.Members, &model.User{
-			ID:   member.ID,
-			Name: member.Username,
-		})
+		response.Members = append(response.Members, toUserModel(member))
 	}
 
 	return response, nil
@@ -577,41 +460,7 @@ func (r *queryResolver) Groups(ctx context.Context) ([]*model.Group, error) {
 
 	response := make([]*model.Group, 0)
 	for _, group := range groups {
-		members, err := r.DbQuery.GetGroupMembers(ctx, group.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		currencies, err := r.DbQuery.GetGroupCurrencies(ctx, group.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		memberModels := make([]*model.User, 0)
-		for _, member := range members {
-			memberModels = append(memberModels, &model.User{
-				ID:   member.ID,
-				Name: member.Username,
-			})
-		}
-
-		currencyModels := make([]*model.Currency, 0)
-		for _, currency := range currencies {
-			currencyModels = append(currencyModels, &model.Currency{
-				ID:     currency.ID,
-				Code:   currency.Code,
-				Name:   currency.Name,
-				Symbol: currency.Symbol,
-			})
-		}
-
-		response = append(response, &model.Group{
-			ID:             group.ID,
-			Name:           group.Name,
-			InviteToken:    group.InviteToken,
-			Members:        memberModels,
-			UsedCurrencies: currencyModels,
-		})
+		response = append(response, toGroupModel(group))
 	}
 
 	return response, nil
@@ -707,33 +556,22 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 			Name:        expense.Name,
 			Description: expense.Description,
 			Amount:      pghelper.Decimal(expense.Amount),
-			Currency: &model.Currency{
-				ID:     currencyMap[expense.CurrencyID].ID,
-				Code:   currencyMap[expense.CurrencyID].Code,
-				Name:   currencyMap[expense.CurrencyID].Name,
-				Symbol: currencyMap[expense.CurrencyID].Symbol,
-			},
-			ExpenseAt: expense.ExpenseAt.Time,
-			Payers:    make([]*model.Share, 0),
-			Shares:    make([]*model.Share, 0),
+			Currency:    toCurrencyModel(currencyMap[expense.CurrencyID]),
+			ExpenseAt:   expense.ExpenseAt.Time,
+			Payers:      make([]*model.Share, 0),
+			Shares:      make([]*model.Share, 0),
 		}
 
 		for _, payer := range payersMap[expense.ID] {
 			expenseModel.Payers = append(expenseModel.Payers, &model.Share{
-				User: &model.User{
-					ID:   payer.UserID,
-					Name: userMap[payer.UserID].Username,
-				},
+				User:   toUserModel(userMap[payer.UserID]),
 				Amount: pghelper.Decimal(payer.Amount),
 			})
 		}
 
 		for _, share := range sharesMap[expense.ID] {
 			expenseModel.Shares = append(expenseModel.Shares, &model.Share{
-				User: &model.User{
-					ID:   share.UserID,
-					Name: userMap[share.UserID].Username,
-				},
+				User:   toUserModel(userMap[share.UserID]),
 				Amount: pghelper.Decimal(share.Amount),
 			})
 		}
@@ -806,33 +644,17 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 
 			if debtor.UserID == userId {
 				response.Owes = append(response.Owes, &model.Owe{
-					User: &model.User{
-						ID:   creditor.UserID,
-						Name: userMap[creditor.UserID].Username,
-					},
-					Amount: amountOwed,
-					Currency: &model.Currency{
-						ID:     currencyMap[currencyID].ID,
-						Code:   currencyMap[currencyID].Code,
-						Name:   currencyMap[currencyID].Name,
-						Symbol: currencyMap[currencyID].Symbol,
-					},
+					User:     toUserModel(userMap[creditor.UserID]),
+					Amount:   amountOwed,
+					Currency: toCurrencyModel(currencyMap[currencyID]),
 				})
 			}
 
 			if creditor.UserID == userId {
 				response.Owed = append(response.Owed, &model.Owe{
-					User: &model.User{
-						ID:   debtor.UserID,
-						Name: userMap[debtor.UserID].Username,
-					},
-					Amount: amountOwed,
-					Currency: &model.Currency{
-						ID:     currencyMap[currencyID].ID,
-						Code:   currencyMap[currencyID].Code,
-						Name:   currencyMap[currencyID].Name,
-						Symbol: currencyMap[currencyID].Symbol,
-					},
+					User:     toUserModel(userMap[debtor.UserID]),
+					Amount:   amountOwed,
+					Currency: toCurrencyModel(currencyMap[currencyID]),
 				})
 			}
 
@@ -860,12 +682,7 @@ func (r *queryResolver) Currencies(ctx context.Context) ([]*model.Currency, erro
 
 	response := make([]*model.Currency, 0)
 	for _, currency := range currencies {
-		response = append(response, &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		})
+		response = append(response, toCurrencyModel(currency))
 	}
 
 	return response, nil

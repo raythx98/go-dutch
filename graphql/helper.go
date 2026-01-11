@@ -90,15 +90,10 @@ func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input mo
 		Name:        expense.Name,
 		Description: expense.Description,
 		Amount:      pghelper.Decimal(expense.Amount),
-		Currency: &model.Currency{
-			ID:     currency.ID,
-			Code:   currency.Code,
-			Name:   currency.Name,
-			Symbol: currency.Symbol,
-		},
-		ExpenseAt: expense.ExpenseAt.Time,
-		Payers:    make([]*model.Share, 0),
-		Shares:    make([]*model.Share, 0),
+		Currency:    toCurrencyModel(currency),
+		ExpenseAt:   expense.ExpenseAt.Time,
+		Payers:      make([]*model.Share, 0),
+		Shares:      make([]*model.Share, 0),
 	}
 
 	for _, payer := range input.Payers {
@@ -112,10 +107,7 @@ func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input mo
 		}
 
 		response.Payers = append(response.Payers, &model.Share{
-			User: &model.User{
-				ID:   expensePayer.UserID,
-				Name: usersMap[expensePayer.UserID].Username,
-			},
+			User:   toUserModel(usersMap[expensePayer.UserID]),
 			Amount: pghelper.Decimal(expensePayer.Amount),
 		})
 	}
@@ -131,10 +123,7 @@ func createExpense(ctx context.Context, qtx *db.Queries, groupId int64, input mo
 		}
 
 		response.Shares = append(response.Shares, &model.Share{
-			User: &model.User{
-				ID:   expenseSharer.UserID,
-				Name: usersMap[expenseSharer.UserID].Username,
-			},
+			User:   toUserModel(usersMap[expenseSharer.UserID]),
 			Amount: pghelper.Decimal(expenseSharer.Amount),
 		})
 	}
@@ -172,4 +161,28 @@ func sortBalanceDesc(a, b balance) int {
 		return 1
 	}
 	return 0
+}
+
+func toUserModel(user db.User) *model.User {
+	return &model.User{
+		ID:   user.ID,
+		Name: user.Username,
+	}
+}
+
+func toCurrencyModel(currency db.Currency) *model.Currency {
+	return &model.Currency{
+		ID:     currency.ID,
+		Code:   currency.Code,
+		Name:   currency.Name,
+		Symbol: currency.Symbol,
+	}
+}
+
+func toGroupModel(group db.Group) *model.Group {
+	return &model.Group{
+		ID:          group.ID,
+		Name:        group.Name,
+		InviteToken: group.InviteToken,
+	}
 }

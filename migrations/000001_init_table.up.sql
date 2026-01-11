@@ -58,23 +58,6 @@ create table if not exists currencies
 create index idx_currencies_not_deleted ON currencies (name) where is_deleted =
      false;
 
-create table if not exists user_currency_preferences
-(
-    id bigserial primary key,
-    user_id     bigint                                   not null,
-    currency_id bigint                                   not null,
-    use_count   int       default 0                      not null,
-    created_at  timestamp default timezone('UTC', now()) not null,
-    unique (user_id, currency_id),
-    constraint fk_user_id foreign key (user_id) references users (id)
-        on delete cascade on update cascade,
-    constraint fk_currency_id foreign key (currency_id) references currencies (id)
-        on delete cascade on update cascade
-);
-
-CREATE INDEX idx_ucp_user_ranking
-    ON user_currency_preferences (user_id, currency_id, use_count);
-
 create table if not exists expenses
 (
     id bigserial primary key,
