@@ -36,10 +36,17 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Install Docker on AWS (if missing)
+      - name: Install Docker and Git on AWS (if missing)
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             set -e
+            
+            # Install git if missing
+            if ! command -v git &> /dev/null
+            then
+              sudo dnf install -y git
+            fi
+
             if ! command -v docker &> /dev/null
             then
               sudo dnf update -y
@@ -52,7 +59,17 @@ jobs:
             # Check for docker compose plugin (standard in newer Amazon Linux 2023)
             if ! docker compose version &> /dev/null
             then
-              sudo dnf install -y docker-compose-plugin
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins/
+              sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            fi
+
+            # Check for docker buildx plugin
+            if ! docker buildx version &> /dev/null
+            then
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins/
+              sudo curl -SL https://github.com/docker/buildx/releases/latest/download/buildx-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-buildx
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
             fi
           EOF
 
@@ -64,7 +81,8 @@ jobs:
             
             if [ -d "$PROJECT_DIR" ]; then
               cd "$PROJECT_DIR"
-              git pull
+              git fetch origin main
+              git reset --hard origin/main
             else
               git clone https://github.com/${{ github.repository }}.git "$PROJECT_DIR"
               cd "$PROJECT_DIR"
