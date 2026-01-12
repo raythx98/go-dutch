@@ -20,7 +20,7 @@ db:
 	docker run -d --rm --name go-dutch-db \
 		--net my-network -p ${APP_GODUTCH_DBPORT}:${APP_GODUTCH_DBPORT} \
 		-e POSTGRES_PASSWORD=${APP_GODUTCH_DBPASSWORD} \
-		-v local-postgres:/var/lib/postgresql/data \
+		-v local-postgres:/var/lib/postgresql \
 		postgres:latest && sleep 5 || true
 
 

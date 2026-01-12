@@ -22,12 +22,13 @@ services:
     ports:
       - "${APP_GODUTCH_DBPORT}:5432"
     volumes:
-      - local-postgres:/var/lib/postgresql/data
+      - local-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${APP_GODUTCH_DBUSERNAME} -d ${APP_GODUTCH_DBDEFAULTNAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
 volumes:
   local-postgres:
