@@ -1,0 +1,13 @@
+{
+	# Email for Let's Encrypt / ZeroSSL notifications
+	email raythx98@gmail.com
+}
+
+161.118.239.148.sslip.io {
+	# Enforce HTTPS is automatic here.
+	# It will redirect port 80 -> 443.
+	reverse_proxy app:8080
+
+	# Optional: Enable compression for better performance
+	encode gzip
+}

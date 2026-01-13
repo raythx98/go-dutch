@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Build output
+main
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependency directories (if any local vendoring not wanted in context)
+vendor/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Env
+.env
+.envrc

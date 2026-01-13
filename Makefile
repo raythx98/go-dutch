@@ -1,54 +1,43 @@
+.PHONY: build run test clean create_migration sqlc gqlgen run_local up down logs
+
+# Default migration name if not provided (make create_migration name=my_migration)
+name ?= new_migration
+
+build:
+	go build -o bin/server server.go
+
+run: build
+	./bin/server
+
+test:
+	go test -v ./...
+
+clean:
+	rm -rf bin/
+
 create_migration:
-	migrate create -ext sql -dir migrations -seq init_table
+	migrate create -ext sql -dir migrations -seq $(name)
 
 sqlc:
 	cd sqlc && sqlc generate --file sqlc.yaml
 
-allow_direnv:
-	direnv allow . || true
-
-build:
-	docker build -t go-dutch .
-
-volume:
-	docker volume create local-postgres
-
-network:
-	docker network create my-network || true
-
-db:
-	docker run -d --rm --name go-dutch-db \
-		--net my-network -p ${APP_GODUTCH_DBPORT}:${APP_GODUTCH_DBPORT} \
-		-e POSTGRES_PASSWORD=${APP_GODUTCH_DBPASSWORD} \
-		-v local-postgres:/var/lib/postgresql \
-		postgres:latest && sleep 5 || true
-
-
-format_env:
-	find .envrc && sed 's/^export //' .envrc > .env || true
-
-migrate_up:
-	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations up
-
-migrate_down:
-	migrate -database 'postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@localhost:${APP_GODUTCH_DBPORT}/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable' -path migrations down
-
-run: allow_direnv build volume network stop db format_env migrate_up
-	docker run -d --rm --name go-dutch-app \
-		--net my-network -p ${APP_GODUTCH_SERVERPORT}:${APP_GODUTCH_SERVERPORT} \
-		--env-file .env go-dutch
-
-stop_app:
-	docker stop go-dutch-app || true
-
-stop_db:
-	docker stop go-dutch-db || true
-	sleep 5
-
-stop: stop_app stop_db
-
 gqlgen:
 	go tool github.com/99designs/gqlgen generate
 
-run_local: allow_direnv sqlc gqlgen
-	set -a && . .envrc && set +a &&go run server.go
+run_local: sqlc gqlgen
+	set -a && . .envrc && set +a && go run server.go
+
+# Docker Compose Helpers
+up:
+	docker compose up -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
+
+remove_caddy:
+	docker stop go-dutch-caddy
+	docker rm go-dutch-caddy
+	docker volume rm go-dutch_caddy_data go-dutch_caddy_config

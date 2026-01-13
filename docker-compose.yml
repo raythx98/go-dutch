@@ -1,12 +1,23 @@
 services:
+  caddy:
+    image: caddy:alpine
+    container_name: go-dutch-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:z
+      - caddy_data:/data
+      - caddy_config:/config
+
   app:
     build: .
     container_name: go-dutch-app
     restart: always
     ports:
       - "${APP_GODUTCH_SERVERPORT}:8080"
-    env_file:
-      - .env
+    env_file: .env
     depends_on:
       db:
         condition: service_healthy
@@ -14,14 +25,14 @@ services:
         condition: service_completed_successfully
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile.migrate
+    image: migrate/migrate
     container_name: go-dutch-migrate
-    env_file:
-      - .env
+    user: root
+    volumes:
+      - ./migrations:/migrations:z
+    env_file: .env
     command:
-      - "-path=/migrations/"
+      - "-path=/migrations"
       - "-database"
       - "postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@db:5432/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable"
       - "up"
@@ -30,21 +41,26 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:latest
+    image: postgres:17-alpine
     container_name: go-dutch-db
     restart: always
-    env_file:
-      - .env
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${APP_GODUTCH_DBUSERNAME}
+      POSTGRES_PASSWORD: ${APP_GODUTCH_DBPASSWORD}
+      POSTGRES_DB: ${APP_GODUTCH_DBDEFAULTNAME}
     ports:
       - "${APP_GODUTCH_DBPORT}:5432"
     volumes:
-      - local-postgres:/var/lib/postgresql
+      - local-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${APP_GODUTCH_DBUSERNAME} -d ${APP_GODUTCH_DBDEFAULTNAME}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 5
       start_period: 10s
 
 volumes:
   local-postgres:
+  caddy_data:
+  caddy_config:

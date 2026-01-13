@@ -62,6 +62,13 @@ jobs:
             # 3. Configure `Docker` to use `Podman`
             sudo alternatives --install /usr/bin/docker docker /usr/bin/podman 1
 
+            # 3.1 Allow rootless containers to bind to privileged ports (80, 443)
+            if ! grep -q "net.ipv4.ip_unprivileged_port_start=80" /etc/sysctl.conf; then
+              echo "Configuring privileged port access for rootless mode..."
+              echo "net.ipv4.ip_unprivileged_port_start=80" | sudo tee -a /etc/sysctl.conf
+              sudo sysctl -p
+            fi
+
             # 4. Ensure Podman socket is running
             if ! systemctl is-active --quiet podman.socket; then
               echo "Starting Podman socket..."
@@ -102,33 +109,56 @@ jobs:
             fi
             
             # Create .env file for Docker Compose
-            echo "APP_GODUTCH_STAGE=production" > .env
-            echo "APP_GODUTCH_DEBUG=false" >> .env
-            echo "APP_GODUTCH_SERVERPORT=8080" >> .env
-            echo "APP_GODUTCH_DBUSERNAME=postgres" >> .env
-            echo "APP_GODUTCH_DBPASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-            echo "APP_GODUTCH_DBHOST=db" >> .env
-            echo "APP_GODUTCH_DBPORT=5432" >> .env
-            echo "APP_GODUTCH_DBDEFAULTNAME=godutch" >> .env
-            echo "APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}" >> .env
+            printf "APP_GODUTCH_STAGE=production\n\
+            APP_GODUTCH_DEBUG=false\n\
+            APP_GODUTCH_SERVERPORT=8080\n\
+            APP_GODUTCH_DBUSERNAME=postgres\n\
+            APP_GODUTCH_DBPASSWORD=${{ secrets.DB_PASSWORD }}\n\
+            APP_GODUTCH_DBHOST=db\n\
+            APP_GODUTCH_DBPORT=5432\n\
+            APP_GODUTCH_DBDEFAULTNAME=godutch\n\
+            APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}\n" > .env
             
-            # Start all services in order (DB -> Migrate -> App)
+            # Start services and capture immediate failures
             source ~/.bashrc
-            docker compose up -d --build
-          
-            # Check migration logs if it failed or is still running
-            echo "--- Migration Logs ---"
-            docker compose logs migrate
             
-            # Check if app is actually running
-            if ! docker ps | grep -q go-dutch-app; then
-              echo "ERROR: go-dutch-app is not running. Printing all logs..."
+            # 1. Build images first (Old app keeps running)
+            if ! docker compose build; then
+                echo "ERROR: Build failed."
+                exit 1
+            fi
+
+            # 2. Run migrations explicitly (Old app keeps running)
+            echo "Running migrations..."
+            if ! docker compose up migrate; then
+                echo "ERROR: Migrations failed. Aborting deployment."
+                docker compose logs migrate
+                exit 1
+            fi
+            
+            # 3. Update App (Downtime starts here, lasts only for restart)
+            echo "Deploying application..."
+            if ! docker compose up -d; then
+              echo "ERROR: Docker Compose failed to start services."
+              echo "--- Container States ---"
+              docker compose ps -a
+              echo "--- Logs (if any) ---"
               docker compose logs
               exit 1
             fi
+          
+            echo "--- Container States ---"
+            docker compose ps -a
+            echo "--- Logs (if any) ---"
+            docker compose logs
             
+            if ! docker compose ps app | grep -q "Up"; then
+              echo "ERROR: App is not running."
+              docker compose logs app
+              exit 1
+            fi
+
             # Cleanup: Prune images and builders, but NOT volumes to protect the DB
-            # docker rm migrate 
-            # docker image prune -f
-            # docker builder prune -f
+            docker image prune -f
+            docker builder prune -f
           EOF

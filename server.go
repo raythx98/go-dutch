@@ -124,6 +124,10 @@ func main() {
 
 	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
 	mux.Handle("/query", queryHandler)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
 	tools.Log.Info(ctx, "starting server",
 		logger.WithField("host", "localhost"),
