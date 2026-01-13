@@ -1,0 +1,134 @@
+name: Deploy to Cloud
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-to-cloud
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.24.8'
+
+      - name: Build project
+        run: go build ./...
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Configure Cloud Instance (Updates, Docker, Firewall, Swap)
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+          
+            # Update system packages
+            echo "Updating system packages..."
+            sudo dnf update -y
+            
+            # 1. System Updates & Basic Tools
+            if ! command -v git &> /dev/null; then
+              echo "Installing Git..."
+              sudo dnf install -y git
+            else
+              echo "Git already installed."
+            fi
+          
+            # 2. Firewall Configuration
+            echo "Configuring firewall..."
+            sudo firewall-cmd --add-service=http --permanent
+            sudo firewall-cmd --add-service=https --permanent
+            sudo firewall-cmd --reload
+          
+            # 3. Configure `Docker` to use `Podman`
+            sudo alternatives --install /usr/bin/docker docker /usr/bin/podman 1
+
+            # 4. Ensure Podman socket is running
+            if ! systemctl is-active --quiet podman.socket; then
+              echo "Starting Podman socket..."
+              sudo systemctl start podman.socket
+              systemctl --user enable --now podman.socket
+            fi
+
+            # 5. Configure DOCKER_HOST for Podman
+            if ! grep -q "DOCKER_HOST" ~/.bashrc; then
+              echo 'export DOCKER_HOST=unix://$XDG_RUNTIME_DIR/podman/podman.sock' >> ~/.bashrc
+              echo "DOCKER_HOST added to ~/.bashrc"
+              source ~/.bashrc
+            fi
+
+            # 6. Install Docker Compose Plugin (if missing)
+            if ! docker compose version &> /dev/null; then
+              echo "Installing Docker Compose plugin..."
+              COMPOSE_VERSION="v5.0.1"
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins/
+              sudo curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-aarch64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            fi
+          EOF
+
+      - name: Clone and Deploy
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -e
+            PROJECT_DIR="/home/${{ secrets.DEPLOY_USER }}/go-dutch"
+            
+            if [ -d "$PROJECT_DIR" ]; then
+              cd "$PROJECT_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              git clone https://github.com/${{ github.repository }}.git "$PROJECT_DIR"
+              cd "$PROJECT_DIR"
+            fi
+            
+            # Create .env file for Docker Compose
+            echo "APP_GODUTCH_STAGE=production" > .env
+            echo "APP_GODUTCH_DEBUG=false" >> .env
+            echo "APP_GODUTCH_SERVERPORT=8080" >> .env
+            echo "APP_GODUTCH_DBUSERNAME=postgres" >> .env
+            echo "APP_GODUTCH_DBPASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            echo "APP_GODUTCH_DBHOST=db" >> .env
+            echo "APP_GODUTCH_DBPORT=5432" >> .env
+            echo "APP_GODUTCH_DBDEFAULTNAME=godutch" >> .env
+            echo "APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}" >> .env
+            
+            # Start all services in order (DB -> Migrate -> App)
+            source ~/.bashrc
+            docker compose up -d --build
+          
+            # Check migration logs if it failed or is still running
+            echo "--- Migration Logs ---"
+            docker compose logs migrate
+            
+            # Check if app is actually running
+            if ! docker ps | grep -q go-dutch-app; then
+              echo "ERROR: go-dutch-app is not running. Printing all logs..."
+              docker compose logs
+              exit 1
+            fi
+            
+            # Cleanup: Prune images and builders, but NOT volumes to protect the DB
+            # docker rm migrate 
+            # docker image prune -f
+            # docker builder prune -f
+          EOF

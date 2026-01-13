@@ -10,15 +10,31 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    container_name: go-dutch-migrate
+    env_file:
+      - .env
+    command:
+      - "-path=/migrations/"
+      - "-database"
+      - "postgres://${APP_GODUTCH_DBUSERNAME}:${APP_GODUTCH_DBPASSWORD}@db:5432/${APP_GODUTCH_DBDEFAULTNAME}?sslmode=disable"
+      - "up"
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:latest
     container_name: go-dutch-db
     restart: always
-    environment:
-      POSTGRES_USER: ${APP_GODUTCH_DBUSERNAME}
-      POSTGRES_PASSWORD: ${APP_GODUTCH_DBPASSWORD}
-      POSTGRES_DB: ${APP_GODUTCH_DBDEFAULTNAME}
+    env_file:
+      - .env
     ports:
       - "${APP_GODUTCH_DBPORT}:5432"
     volumes:
@@ -27,8 +43,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${APP_GODUTCH_DBUSERNAME} -d ${APP_GODUTCH_DBDEFAULTNAME}"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 3
+      start_period: 10s
 
 volumes:
   local-postgres:
