@@ -5,3 +5,5 @@ drop table if exists currencies;
 drop table if exists user_group;
 drop table if exists users;
 drop table if exists groups;
+
+DROP EXTENSION IF EXISTS citext;

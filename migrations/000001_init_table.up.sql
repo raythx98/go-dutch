@@ -1,8 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS citext;
+
 create table if not exists users
 (
     id bigserial primary key,
-    username   varchar(20) unique                       not null,
-    email      varchar(255) unique                      not null,
+    username   citext unique                        not null,
+    email      citext unique                        not null,
     password   varchar(255)                             not null,
     created_at timestamp default timezone('UTC', now()) not null,
     is_deleted boolean   default false                  not null
