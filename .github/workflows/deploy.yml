@@ -41,6 +41,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -e
           
+            # Allow lingering, prevent podman socket from stopping on logout
+            sudo loginctl enable-linger ${{ secrets.DEPLOY_USER }}
+          
             # Update system packages
             echo "Updating system packages..."
             sudo dnf update -y
