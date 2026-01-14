@@ -64,9 +64,28 @@ Configure the following in your repository settings:
 - `DB_PASSWORD`: Password for the production Postgres container.
 - `JWT_SECRET`: Secret for signing JWT tokens.
 
-### 2. OCI Configuration
-- **Instance:** Oracle Linux 8/9 or Ubuntu (Recommended: **VM.Standard.A1.Flex** for ARM performance).
-- **Security List:** Allow Ingress for SSH (22), HTTP (80), HTTPS (443), and API Traffic (8080).
+### 2. OCI Infrastructure Setup
+Follow these steps to set up your Oracle Cloud environment:
+
+1.  **Compute Instance:** Create an ARM instance (Recommended: **VM.Standard.A1.Flex**).
+2.  **Storage:** Ensure **Block Storage** (minimum 50GB) is attached for persistent database volumes.
+3.  **Networking:**
+    - Create a **VCN (Virtual Cloud Network)** with a **Public Subnet**.
+    - Create an **Internet Gateway** and attach it to your VCN's route table if not already present.
+    - Create a **Network Security Group (NSG)** or update the **Security List** to allow stateful Ingress traffic from all source for:
+        - **SSH (22)**
+        - **HTTP (80)**
+        - **HTTPS/TLS (443)**
+4.  **Static IP:** 
+    - Create a **Reserved Public IP** in the OCI Console.
+    - Attach it to your instance's VNIC as the primary public IP.
+5.  **Access:**
+    - Save your **Private Key** (`.key`) safely during instance creation.
+    - Set the correct permissions and connect to your instance:
+      ```bash
+      chmod 400 "ssh-key.key"
+      ssh -i "ssh-key.key" opc@<public-ip>
+      ```
 
 ## API Documentation
 This project uses GraphQL. You can explore the schema and test queries via the GraphQL Playground at the root URL (`/`) when running the server.
