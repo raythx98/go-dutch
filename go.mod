@@ -1,6 +1,6 @@
 module github.com/raythx98/go-dutch
 
-go 1.24.8
+go 1.24.11
 
 require (
 	github.com/99designs/gqlgen v0.17.85

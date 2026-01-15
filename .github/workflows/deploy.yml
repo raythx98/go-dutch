@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '>=1.24.8'
+          go-version: '>=1.24.11'
 
       - name: Build project
         run: go build ./...
@@ -46,7 +46,7 @@ jobs:
           
             # Update system packages
             echo "Updating system packages..."
-            sudo dnf update -y
+            sudo dnf update -y --exclude=tuned,tuned-profiles-oci
             
             # 1. System Updates & Basic Tools
             if ! command -v git &> /dev/null; then
@@ -54,6 +54,13 @@ jobs:
               sudo dnf install -y git
             else
               echo "Git already installed."
+            fi
+          
+            if ! command -v podman &> /dev/null; then
+              echo "Installing Podman..."
+              sudo dnf install -y podman
+            else
+              echo "Podman already installed."
             fi
           
             # 2. Firewall Configuration
