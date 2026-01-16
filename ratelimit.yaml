@@ -3,12 +3,63 @@ default:
   burst: 2
 
 operations:
+  # Mutation
   Mutation.register:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.login:
+    rate: 1
+    burst: 2
+  Mutation.joinGroup:
+    rate: 1
+    burst: 1
+  Mutation.addGroup:
+    rate: 1
+    burst: 1
+  Mutation.deleteGroup:
+    rate: 1
+    burst: 1
+  Mutation.addMember:
+    rate: 1
+    burst: 1
+  Mutation.addRepayment:
+    rate: 1
+    burst: 1
+  Mutation.addExpense:
+    rate: 1
+    burst: 1
+  Mutation.editExpense:
+    rate: 1
+    burst: 1
+  Mutation.deleteExpense:
+    rate: 1
+    burst: 1
+
+  # Query
+  Query.previewGroup:
+    rate: 1
+    burst: 1
+  Query.groups:
+    rate: 1
+    burst: 1
+  Query.group:
     rate: 1
     burst: 1
   Query.expenses:
-    rate: 10
-    burst: 20
+    rate: 1
+    burst: 1
+  Query.currencies:
+    rate: 1
+    burst: 1
+
+  # Subscription
+  Subscription.expenseAdded:
+    rate: 1
+    burst: 2
+  Subscription.expenseUpdated:
+    rate: 1
+    burst: 2
+
+  anonymous_or_unparsable:
+    rate: 1
+    burst: 2

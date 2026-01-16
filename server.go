@@ -1,23 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/raythx98/go-dutch/graphql"
-	"github.com/raythx98/go-dutch/middleware/ratelimit"
 	"github.com/raythx98/go-dutch/tools/config"
 	"github.com/raythx98/go-dutch/tools/resources"
-
 	"github.com/raythx98/gohelpme/errorhelper"
 	"github.com/raythx98/gohelpme/middleware"
 	"github.com/raythx98/gohelpme/tool/logger"
 	"github.com/raythx98/gohelpme/tool/reqctx"
+	"github.com/vektah/gqlparser/v2/parser"
 
 	gql "github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -98,12 +101,12 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Load Rate Limit Config
-	var rlConfig ratelimit.Config
+	var rlConfig middleware.Config
 	rlFile, err := os.ReadFile("ratelimit.yaml")
 	if err != nil {
 		tools.Log.Warn(ctx, "failed to load ratelimit.yaml, using defaults", logger.WithError(err))
-		rlConfig = ratelimit.Config{
-			Default: ratelimit.RateConfig{Rate: 20, Burst: 50},
+		rlConfig = middleware.Config{
+			Default: middleware.RateConfig{Rate: 1, Burst: 2},
 		}
 	} else {
 		if err := yaml.Unmarshal(rlFile, &rlConfig); err != nil {
@@ -111,15 +114,76 @@ func main() {
 		}
 	}
 
-	rateLimiter := ratelimit.NewRateLimiter(rlConfig, tools.Log)
+	rateLimiter := middleware.NewRateLimiter(rlConfig, tools.Log, func(r *http.Request) (string, string) {
+		identifier := middleware.ExtractIP(r)
+		if reqCtx := reqctx.GetValue(r.Context()); reqCtx != nil && reqCtx.UserId != nil {
+			identifier = fmt.Sprintf("user:%d", *reqCtx.UserId)
+		}
+
+		var gqlQueryString string
+		var clientOperationName string
+
+		if r.Method == http.MethodPost {
+			bodyBytes, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			var gqlReq struct {
+				OperationName string `json:"operationName"`
+				Query         string `json:"query"`
+			}
+			if err := json.Unmarshal(bodyBytes, &gqlReq); err == nil {
+				clientOperationName = gqlReq.OperationName
+				gqlQueryString = gqlReq.Query
+			}
+		} else if r.Method == http.MethodGet {
+			clientOperationName = r.URL.Query().Get("operationName")
+			gqlQueryString = r.URL.Query().Get("query")
+		}
+
+		derivedOperationName := ""
+		if gqlQueryString != "" {
+			parsedQuery, err := parser.ParseQuery(&ast.Source{Input: gqlQueryString})
+			if err == nil {
+				var op *ast.OperationDefinition
+				if clientOperationName != "" {
+					op = parsedQuery.Operations.ForName(clientOperationName)
+				} else if len(parsedQuery.Operations) > 0 {
+					for _, o := range parsedQuery.Operations {
+						op = o
+						break
+					}
+				}
+
+				if op != nil && len(op.SelectionSet) > 0 {
+					if field, ok := op.SelectionSet[0].(*ast.Field); ok {
+						opType := strings.Title(string(op.Operation))
+						derivedOperationName = fmt.Sprintf("%s.%s", opType, field.Name)
+					}
+				}
+			}
+		}
+
+		if derivedOperationName == "" {
+			derivedOperationName = "anonymous_or_unparsable"
+		}
+
+		return identifier, derivedOperationName
+	})
 
 	queryHandler := middleware.Chain(srv.ServeHTTP, []func(http.HandlerFunc) http.HandlerFunc{
 		middleware.CORS,
-		rateLimiter.Middleware,
+		rateLimiter.RateLimit,
 		middleware.AddRequestId,
 		middleware.ReqCtx,
 		middleware.JwtSubject(tools.Jwt),
-		middleware.Log(tools.Log),
+		middleware.Log(tools.Log, middleware.LogConfig{
+			RedactedPaths: []string{
+				"request.body.variables.password",
+				"request.headers.Authorization",
+				"response.body.data.register.token",
+				"response.body.data.login.token",
+			},
+		}),
 	}...)
 
 	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
