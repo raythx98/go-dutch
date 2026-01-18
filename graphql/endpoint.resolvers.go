@@ -107,6 +107,17 @@ func (r *mutationResolver) JoinGroup(ctx context.Context, inviteCode string) (*m
 
 	userId := getActionTaker(ctx)
 
+	_, err = r.DbQuery.GetUserGroup(ctx, db.GetUserGroupParams{
+		UserID:  userId,
+		GroupID: group.ID,
+	})
+	if err == nil {
+		return nil, errorhelper.NewAppError(UserAlreadyInGroup, Messages[UserAlreadyInGroup], nil)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
 	err = r.DbQuery.AddUserToGroup(ctx, db.AddUserToGroupParams{
 		UserID:  userId,
 		GroupID: group.ID,

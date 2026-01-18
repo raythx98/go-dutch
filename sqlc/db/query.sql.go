@@ -196,7 +196,7 @@ const getCurrencies = `-- name: GetCurrencies :many
 select id, code, name, symbol, created_at, is_deleted
 from currencies
 where is_deleted = false
-order by name asc
+order by code asc
 `
 
 func (q *Queries) GetCurrencies(ctx context.Context) ([]Currency, error) {
@@ -605,6 +605,32 @@ func (q *Queries) GetUserByUsernameOrEmail(ctx context.Context, username string)
 		&i.Username,
 		&i.Email,
 		&i.Password,
+		&i.CreatedAt,
+		&i.IsDeleted,
+	)
+	return i, err
+}
+
+const getUserGroup = `-- name: GetUserGroup :one
+select id, user_id, group_id, created_at, is_deleted
+from user_group
+where user_id = $1
+  and group_id = $2
+  and is_deleted = false
+`
+
+type GetUserGroupParams struct {
+	UserID  int64
+	GroupID int64
+}
+
+func (q *Queries) GetUserGroup(ctx context.Context, arg GetUserGroupParams) (UserGroup, error) {
+	row := q.db.QueryRow(ctx, getUserGroup, arg.UserID, arg.GroupID)
+	var i UserGroup
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.GroupID,
 		&i.CreatedAt,
 		&i.IsDeleted,
 	)

@@ -9,6 +9,7 @@ const (
 	CurrencyNotSupported
 	NotGroupMember
 	InvalidInviteCode
+	UserAlreadyInGroup
 )
 
 var Messages = map[int]string{
@@ -20,4 +21,5 @@ var Messages = map[int]string{
 	CurrencyNotSupported:      "Currency is not supported",
 	NotGroupMember:            "You are not an existing group member",
 	InvalidInviteCode:         "Invalid invite code",
+	UserAlreadyInGroup:        "You are already in the group",
 }

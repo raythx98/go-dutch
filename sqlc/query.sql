@@ -2,7 +2,14 @@
 select *
 from currencies
 where is_deleted = false
-order by name asc;
+order by code asc;
+
+-- name: GetUserGroup :one
+select *
+from user_group
+where user_id = $1
+  and group_id = $2
+  and is_deleted = false;
 
 -- name: GetCurrenciesByIds :many
 select *
