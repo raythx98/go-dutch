@@ -30,7 +30,7 @@ func CreateTools(cfg *config.Specification, ctx context.Context) Tools {
 		Jwt: jwthelper.New(jwthelper.Config{
 			Issuer:               "raythx98@gmail.com",
 			Audiences:            []string{"raythx98@gmail.com"},
-			AccessTokenValidity:  24 * time.Hour,
+			AccessTokenValidity:  30 * 24 * time.Hour,
 			RefreshTokenValidity: 0,
 		}, cfg),
 		Crypto: crypto.New(crypto.DefaultConfig()),

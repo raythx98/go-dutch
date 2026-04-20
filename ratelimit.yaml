@@ -12,45 +12,45 @@ operations:
     burst: 2
   Mutation.joinGroup:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.addGroup:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.deleteGroup:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.addMember:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.addRepayment:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.addExpense:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.editExpense:
     rate: 1
-    burst: 1
+    burst: 2
   Mutation.deleteExpense:
     rate: 1
-    burst: 1
+    burst: 2
 
   # Query
   Query.previewGroup:
     rate: 1
-    burst: 1
+    burst: 2
   Query.groups:
-    rate: 1
-    burst: 1
+    rate: 2
+    burst: 4
   Query.group:
-    rate: 1
-    burst: 1
+    rate: 2
+    burst: 4
   Query.expenses:
-    rate: 1
-    burst: 1
+    rate: 2
+    burst: 4
   Query.currencies:
     rate: 1
-    burst: 1
+    burst: 2
 
   # Subscription
   Subscription.expenseAdded:
