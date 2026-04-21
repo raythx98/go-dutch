@@ -127,7 +127,8 @@ jobs:
             APP_GODUTCH_DBHOST=db\n\
             APP_GODUTCH_DBPORT=5432\n\
             APP_GODUTCH_DBDEFAULTNAME=godutch\n\
-            APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}\n" > .env
+            APP_GODUTCH_JWTSECRET=${{ secrets.JWT_SECRET }}\n\
+            APP_GODUTCH_EXCHANGERATEAPIKEY=${{ secrets.EXCHANGE_RATE_API_KEY }}\n" > .env
             
             # Start services and capture immediate failures
             source ~/.bashrc
