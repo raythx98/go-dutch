@@ -11,6 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acquireExchangeRateLock = `-- name: AcquireExchangeRateLock :exec
+SELECT pg_advisory_lock($1)
+`
+
+func (q *Queries) AcquireExchangeRateLock(ctx context.Context, pgAdvisoryLock int64) error {
+	_, err := q.db.Exec(ctx, acquireExchangeRateLock, pgAdvisoryLock)
+	return err
+}
+
 const addUserToGroup = `-- name: AddUserToGroup :exec
 insert into user_group (user_id, group_id)
 values ($1, $2)
@@ -24,6 +33,31 @@ type AddUserToGroupParams struct {
 func (q *Queries) AddUserToGroup(ctx context.Context, arg AddUserToGroupParams) error {
 	_, err := q.db.Exec(ctx, addUserToGroup, arg.UserID, arg.GroupID)
 	return err
+}
+
+const createConversion = `-- name: CreateConversion :one
+INSERT INTO conversions (source_expense_id, target_expense_id, rate)
+VALUES ($1, $2, $3)
+RETURNING id, source_expense_id, target_expense_id, rate, created_at
+`
+
+type CreateConversionParams struct {
+	SourceExpenseID int64
+	TargetExpenseID int64
+	Rate            pgtype.Numeric
+}
+
+func (q *Queries) CreateConversion(ctx context.Context, arg CreateConversionParams) (Conversion, error) {
+	row := q.db.QueryRow(ctx, createConversion, arg.SourceExpenseID, arg.TargetExpenseID, arg.Rate)
+	var i Conversion
+	err := row.Scan(
+		&i.ID,
+		&i.SourceExpenseID,
+		&i.TargetExpenseID,
+		&i.Rate,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createExpense = `-- name: CreateExpense :one
@@ -192,6 +226,54 @@ func (q *Queries) DeleteGroup(ctx context.Context, id int64) error {
 	return err
 }
 
+const getConversionBySourceExpenseId = `-- name: GetConversionBySourceExpenseId :one
+SELECT id, source_expense_id, target_expense_id, rate, created_at FROM conversions WHERE source_expense_id = $1
+`
+
+func (q *Queries) GetConversionBySourceExpenseId(ctx context.Context, sourceExpenseID int64) (Conversion, error) {
+	row := q.db.QueryRow(ctx, getConversionBySourceExpenseId, sourceExpenseID)
+	var i Conversion
+	err := row.Scan(
+		&i.ID,
+		&i.SourceExpenseID,
+		&i.TargetExpenseID,
+		&i.Rate,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getConversionsByExpenseIds = `-- name: GetConversionsByExpenseIds :many
+SELECT id, source_expense_id, target_expense_id, rate, created_at FROM conversions
+WHERE target_expense_id = ANY($1::bigint[])
+`
+
+func (q *Queries) GetConversionsByExpenseIds(ctx context.Context, dollar_1 []int64) ([]Conversion, error) {
+	rows, err := q.db.Query(ctx, getConversionsByExpenseIds, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Conversion
+	for rows.Next() {
+		var i Conversion
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceExpenseID,
+			&i.TargetExpenseID,
+			&i.Rate,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCurrencies = `-- name: GetCurrencies :many
 select id, code, name, symbol, created_at, is_deleted
 from currencies
@@ -258,6 +340,22 @@ func (q *Queries) GetCurrenciesByIds(ctx context.Context, dollar_1 []int64) ([]C
 		return nil, err
 	}
 	return items, nil
+}
+
+const getExchangeRateSnapshot = `-- name: GetExchangeRateSnapshot :one
+SELECT id, base_currency_code, rates, fetched_at FROM exchange_rate_snapshots WHERE base_currency_code = $1
+`
+
+func (q *Queries) GetExchangeRateSnapshot(ctx context.Context, baseCurrencyCode string) (ExchangeRateSnapshot, error) {
+	row := q.db.QueryRow(ctx, getExchangeRateSnapshot, baseCurrencyCode)
+	var i ExchangeRateSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.BaseCurrencyCode,
+		&i.Rates,
+		&i.FetchedAt,
+	)
+	return i, err
 }
 
 const getExpense = `-- name: GetExpense :one
@@ -548,6 +646,33 @@ func (q *Queries) GetGroupsByUser(ctx context.Context, userID int64) ([]Group, e
 	return items, nil
 }
 
+const getSourceExpenseIdsForGroup = `-- name: GetSourceExpenseIdsForGroup :many
+SELECT c.source_expense_id
+FROM conversions c
+JOIN expenses e ON e.id = c.source_expense_id
+WHERE e.group_id = $1 AND e.is_deleted = false
+`
+
+func (q *Queries) GetSourceExpenseIdsForGroup(ctx context.Context, groupID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, getSourceExpenseIdsForGroup, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var source_expense_id int64
+		if err := rows.Scan(&source_expense_id); err != nil {
+			return nil, err
+		}
+		items = append(items, source_expense_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 select id, username, email, password, created_at, is_deleted
 from users
@@ -669,4 +794,38 @@ func (q *Queries) GetUsersByIds(ctx context.Context, dollar_1 []int64) ([]User, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseExchangeRateLock = `-- name: ReleaseExchangeRateLock :exec
+SELECT pg_advisory_unlock($1)
+`
+
+func (q *Queries) ReleaseExchangeRateLock(ctx context.Context, pgAdvisoryUnlock int64) error {
+	_, err := q.db.Exec(ctx, releaseExchangeRateLock, pgAdvisoryUnlock)
+	return err
+}
+
+const upsertExchangeRateSnapshot = `-- name: UpsertExchangeRateSnapshot :one
+INSERT INTO exchange_rate_snapshots (base_currency_code, rates, fetched_at)
+VALUES ($1, $2, NOW())
+ON CONFLICT (base_currency_code)
+DO UPDATE SET rates = EXCLUDED.rates, fetched_at = EXCLUDED.fetched_at
+RETURNING id, base_currency_code, rates, fetched_at
+`
+
+type UpsertExchangeRateSnapshotParams struct {
+	BaseCurrencyCode string
+	Rates            []byte
+}
+
+func (q *Queries) UpsertExchangeRateSnapshot(ctx context.Context, arg UpsertExchangeRateSnapshotParams) (ExchangeRateSnapshot, error) {
+	row := q.db.QueryRow(ctx, upsertExchangeRateSnapshot, arg.BaseCurrencyCode, arg.Rates)
+	var i ExchangeRateSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.BaseCurrencyCode,
+		&i.Rates,
+		&i.FetchedAt,
+	)
+	return i, err
 }

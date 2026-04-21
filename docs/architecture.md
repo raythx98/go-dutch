@@ -60,7 +60,7 @@ HTTP POST /query
 - `Crypto` helper (password hashing)
 - `Resolver` struct embedding all tools + `db.Queries`
 
-The `Resolver` struct is the only thing the GraphQL handler needs.
+The `Resolver` struct is the only thing the GraphQL handler needs. It also holds `*exchangerate.Service` for the `exchangeRates` query and `addConversion` mutation.
 
 ## Authentication
 
@@ -72,11 +72,15 @@ The `Resolver` struct is the only thing the GraphQL handler needs.
 ## Balance Calculation
 
 Balance settlement uses a greedy algorithm:
-1. Aggregate all expense shares to compute net balances per user.
+1. Aggregate all expense shares to compute net balances per user (across **all** expense types, including hidden conversion source legs).
 2. Separate users into creditors (owed money) and debtors (owe money).
 3. Greedily match the largest debtor to the largest creditor until all balances are settled.
 
 This minimizes the number of transactions needed to settle all debts.
+
+### Currency Conversion
+
+A conversion creates two linked records: a hidden source leg (`type=Repayment`) that cancels the old-currency balance, and a visible target leg (`type=Conversion`) that opens a new-currency balance, linked via the `conversions` table. Source legs are excluded from the `expenses` query display list but always included in balance calculation.
 
 ## Code Generation
 

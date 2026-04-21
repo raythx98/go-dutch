@@ -10,7 +10,7 @@ External services — contracts, auth, and failure modes.
 
 **Auth**: username/password from environment variables (`APP_GODUTCH_DBUSERNAME`, `APP_GODUTCH_DBPASSWORD`). Connection via `pgx/v5` pool.
 
-**Schema**: managed by golang-migrate. Tables: `users`, `groups`, `group_members`, `expenses`, `expense_payers`, `expense_shares`, `currencies`.
+**Schema**: managed by golang-migrate. Tables: `users`, `groups`, `group_members`, `expenses`, `expense_payers`, `expense_shares`, `currencies`, `exchange_rate_snapshots`, `conversions`.
 
 **Failure modes**:
 - Connection failure at startup → fatal log, server does not start.
@@ -68,6 +68,23 @@ External services — contracts, auth, and failure modes.
 - Missing down migration → rollback is impossible for that version.
 
 **New migration**: `make create_migration name=<descriptive_name>`.
+
+---
+
+## exchangerate-api.com
+
+**Used for**: daily USD-base exchange rate snapshots.
+
+**Auth**: API key via `EXCHANGE_RATE_API_KEY` env var. Passed in the URL path: `v6.exchangerate-api.com/v6/{key}/latest/USD`.
+
+**Contract**: JSON response with a `conversion_rates` map (currency code → float). One snapshot per day; cached in `exchange_rate_snapshots` with an upsert. Cross-rates are computed client-side: `rate = rates[target] / rates[source]`.
+
+**Failure modes**:
+- Non-200 or network error → use stale snapshot (logged at WARN). If no snapshot exists at all, `GetOrRefresh` returns an error.
+- Missing API key → skip network fetch; serve stale or error as above.
+- Currency code not in API response → added to `UnsupportedCurrencies`; frontend warns user but allows manual rate entry.
+
+**Config var**: `EXCHANGE_RATE_API_KEY` (optional; `required:"false"`).
 
 ---
 

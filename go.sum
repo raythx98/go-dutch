@@ -67,10 +67,6 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/raythx98/gohelpme v1.0.1-0.20260116151502-4c3dea5c3991 h1:7D+6GegR71Z45VQGIVkIni/MEcJfV1exvVQF3O35llQ=
-github.com/raythx98/gohelpme v1.0.1-0.20260116151502-4c3dea5c3991/go.mod h1:/8jvOCu3dlFSzjRBieQaB8P9AzYd+O3BOqW1sdASDK0=
-github.com/raythx98/gohelpme v1.0.1-0.20260116152533-10cdbd5ccad8 h1:z7UolHSIk1uhQ1zageyKCsxEpkLOIi6hway8BVbb1CA=
-github.com/raythx98/gohelpme v1.0.1-0.20260116152533-10cdbd5ccad8/go.mod h1:/8jvOCu3dlFSzjRBieQaB8P9AzYd+O3BOqW1sdASDK0=
 github.com/raythx98/gohelpme v1.0.2 h1:VmAyVvdrTMAQPMO6qbcSmJPOgVzjaf1Wh1U8Gjwh2I8=
 github.com/raythx98/gohelpme v1.0.2/go.mod h1:/8jvOCu3dlFSzjRBieQaB8P9AzYd+O3BOqW1sdASDK0=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=

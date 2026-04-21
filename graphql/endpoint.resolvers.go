@@ -8,6 +8,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"time"
@@ -316,6 +317,165 @@ func (r *mutationResolver) AddRepayment(ctx context.Context, groupID int64, inpu
 	}, nil
 }
 
+// AddConversion is the resolver for the addConversion field.
+func (r *mutationResolver) AddConversion(ctx context.Context, groupID int64, input model.ConversionInput) (*model.Expense, error) {
+	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, getActionTaker(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	if input.SourceCurrencyID == input.TargetCurrencyID {
+		return nil, errorhelper.NewAppError(SameCurrencyConversion, Messages[SameCurrencyConversion], nil)
+	}
+
+	if input.SourceAmount.Equal(decimal.Zero) {
+		return nil, fmt.Errorf("source amount must be greater than zero")
+	}
+
+	users, err := r.DbQuery.GetUsersByIds(ctx, []int64{input.DebtorID, input.CreditorID})
+	if err != nil {
+		return nil, err
+	}
+	if len(users) != 2 {
+		return nil, errorhelper.NewAppError(UserDoesNotExist, Messages[UserDoesNotExist], nil)
+	}
+
+	sourceCurrency, err := getCurrency(ctx, r.DbQuery, nil, input.SourceCurrencyID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetCurrency, err := getCurrency(ctx, r.DbQuery, nil, input.TargetCurrencyID)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := r.Db.Pool().Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(tx pgx.Tx, ctx context.Context) {
+		if err := tx.Rollback(ctx); err != nil {
+			r.Log.Error(ctx, "failed to rollback transaction", logger.WithError(err))
+		}
+	}(tx, ctx)
+
+	qtx := r.DbQuery.WithTx(tx)
+	now := time.Now()
+
+	// Source leg (Repayment): cancels old-currency balance.
+	// payer=debtor (pays back), share=creditor (receives back).
+	sourceExpense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
+		GroupID:     groupID,
+		Type:        ExpenseTypeRepayment,
+		Name:        fmt.Sprintf("[Conversion Source] %s", input.Name),
+		Description: input.Description,
+		Amount:      pghelper.FromDecimal(input.SourceAmount),
+		CurrencyID:  input.SourceCurrencyID,
+		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
+		CreatedAt:   pghelper.Time(&now),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := qtx.CreateExpensePayer(ctx, db.CreateExpensePayerParams{
+		ExpenseID: sourceExpense.ID,
+		UserID:    input.DebtorID,
+		Amount:    pghelper.FromDecimal(input.SourceAmount),
+	}); err != nil {
+		return nil, err
+	}
+
+	if _, err := qtx.CreateExpenseShare(ctx, db.CreateExpenseShareParams{
+		ExpenseID: sourceExpense.ID,
+		UserID:    input.CreditorID,
+		Amount:    pghelper.FromDecimal(input.SourceAmount),
+	}); err != nil {
+		return nil, err
+	}
+
+	// Target leg (Conversion): opens new-currency balance.
+	// payer=creditor (records payment), share=debtor (has share).
+	targetExpense, err := qtx.CreateExpense(ctx, db.CreateExpenseParams{
+		GroupID:     groupID,
+		Type:        ExpenseTypeConversion,
+		Name:        input.Name,
+		Description: input.Description,
+		Amount:      pghelper.FromDecimal(input.TargetAmount),
+		CurrencyID:  input.TargetCurrencyID,
+		ExpenseAt:   pghelper.Time(&input.ExpenseAt),
+		CreatedAt:   pghelper.Time(&now),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	targetPayer, err := qtx.CreateExpensePayer(ctx, db.CreateExpensePayerParams{
+		ExpenseID: targetExpense.ID,
+		UserID:    input.CreditorID,
+		Amount:    pghelper.FromDecimal(input.TargetAmount),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	targetSharer, err := qtx.CreateExpenseShare(ctx, db.CreateExpenseShareParams{
+		ExpenseID: targetExpense.ID,
+		UserID:    input.DebtorID,
+		Amount:    pghelper.FromDecimal(input.TargetAmount),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rate := input.TargetAmount.Div(input.SourceAmount)
+	if _, err := qtx.CreateConversion(ctx, db.CreateConversionParams{
+		SourceExpenseID: sourceExpense.ID,
+		TargetExpenseID: targetExpense.ID,
+		Rate:            pghelper.FromDecimal(rate),
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	userMap := make(map[int64]db.User)
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+
+	return &model.Expense{
+		ID:          targetExpense.ID,
+		Type:        expenseTypeString(targetExpense.Type),
+		Name:        targetExpense.Name,
+		Description: targetExpense.Description,
+		Amount:      pghelper.Decimal(targetExpense.Amount),
+		Currency:    toCurrencyModel(targetCurrency),
+		ExpenseAt:   targetExpense.ExpenseAt.Time,
+		Payers: []*model.Share{
+			{
+				User:   toUserModel(userMap[targetPayer.UserID]),
+				Amount: pghelper.Decimal(targetPayer.Amount),
+			},
+		},
+		Shares: []*model.Share{
+			{
+				User:   toUserModel(userMap[targetSharer.UserID]),
+				Amount: pghelper.Decimal(targetSharer.Amount),
+			},
+		},
+		ConversionDetails: &model.ConversionDetails{
+			SourceCurrency: toCurrencyModel(sourceCurrency),
+			SourceAmount:   input.SourceAmount,
+			Rate:           rate,
+		},
+	}, nil
+}
+
 // AddExpense is the resolver for the addExpense field.
 func (r *mutationResolver) AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error) {
 	_, err := checkIsGroupMember(ctx, r.DbQuery, groupID, getActionTaker(ctx))
@@ -424,6 +584,43 @@ func (r *mutationResolver) DeleteExpense(ctx context.Context, expenseID int64) (
 	_, err = checkIsGroupMember(ctx, r.DbQuery, expense.GroupID, userId)
 	if err != nil {
 		return false, err
+	}
+
+	// Block direct deletion of a hidden conversion source leg.
+	if expense.Type == ExpenseTypeRepayment {
+		if _, err := r.DbQuery.GetConversionBySourceExpenseId(ctx, expenseID); err == nil {
+			return false, errorhelper.NewAppError(ConversionSourceLegDeletion, Messages[ConversionSourceLegDeletion], nil)
+		}
+	}
+
+	// Cascade: soft-delete both legs atomically when deleting a conversion.
+	if expense.Type == ExpenseTypeConversion {
+		convs, err := r.DbQuery.GetConversionsByExpenseIds(ctx, []int64{expenseID})
+		if err != nil {
+			return false, err
+		}
+		if len(convs) > 0 {
+			tx, err := r.Db.Pool().Begin(ctx)
+			if err != nil {
+				return false, err
+			}
+			defer func(tx pgx.Tx, ctx context.Context) {
+				if err := tx.Rollback(ctx); err != nil {
+					r.Log.Error(ctx, "failed to rollback transaction", logger.WithError(err))
+				}
+			}(tx, ctx)
+			qtx := r.DbQuery.WithTx(tx)
+			if err := qtx.DeleteExpense(ctx, convs[0].SourceExpenseID); err != nil {
+				return false, err
+			}
+			if err := qtx.DeleteExpense(ctx, expenseID); err != nil {
+				return false, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
 	}
 
 	if err := r.DbQuery.DeleteExpense(ctx, expenseID); err != nil {
@@ -572,12 +769,50 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 		userMap[user.ID] = user
 	}
 
+	// Index all raw expenses by ID for O(1) source-leg lookups.
+	expenseByIdMap := make(map[int64]db.Expense)
+	for _, e := range expenses {
+		expenseByIdMap[e.ID] = e
+	}
+
+	// Get source leg IDs to exclude from the display list.
+	sourceExpenseIds, err := r.DbQuery.GetSourceExpenseIdsForGroup(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	sourceIdSet := make(map[int64]bool, len(sourceExpenseIds))
+	for _, id := range sourceExpenseIds {
+		sourceIdSet[id] = true
+	}
+
+	// Fetch conversion records for visible Conversion expenses.
+	convExpenseIds := make([]int64, 0)
+	for _, e := range expenses {
+		if e.Type == ExpenseTypeConversion && !sourceIdSet[e.ID] {
+			convExpenseIds = append(convExpenseIds, e.ID)
+		}
+	}
+	conversionRecords, err := r.DbQuery.GetConversionsByExpenseIds(ctx, convExpenseIds)
+	if err != nil {
+		return nil, err
+	}
+	convMap := make(map[int64]db.Conversion, len(conversionRecords))
+	for _, c := range conversionRecords {
+		convMap[c.TargetExpenseID] = c
+	}
+
 	response := &model.ExpenseSummary{
 		Expenses: make([]*model.Expense, 0),
 		Owes:     make([]*model.Owe, 0),
 		Owed:     make([]*model.Owe, 0),
 	}
+
+	// Build display list: skip hidden source legs, attach conversionDetails.
 	for _, expense := range expenses {
+		if sourceIdSet[expense.ID] {
+			continue
+		}
+
 		expenseModel := &model.Expense{
 			ID:          expense.ID,
 			Type:        expenseTypeString(expense.Type),
@@ -604,6 +839,18 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 			})
 		}
 
+		if expense.Type == ExpenseTypeConversion {
+			if conv, ok := convMap[expense.ID]; ok {
+				if sourceExp, ok := expenseByIdMap[conv.SourceExpenseID]; ok {
+					expenseModel.ConversionDetails = &model.ConversionDetails{
+						SourceCurrency: toCurrencyModel(currencyMap[sourceExp.CurrencyID]),
+						SourceAmount:   pghelper.Decimal(sourceExp.Amount),
+						Rate:           pghelper.Decimal(conv.Rate),
+					}
+				}
+			}
+		}
+
 		response.Expenses = append(response.Expenses, expenseModel)
 	}
 
@@ -625,17 +872,19 @@ func (r *queryResolver) Expenses(ctx context.Context, groupID int64) (*model.Exp
 	// bob is owed 3
 	// charlie owes 4
 
+	// Balance computed from ALL raw expenses (including hidden source legs)
+	// so conversions correctly zero out the old-currency debt.
 	balances := make(map[int64]map[int64]decimal.Decimal) // currencyID -> userID -> balance
-	for _, expense := range response.Expenses {
-		currencyID := expense.Currency.ID
+	for _, expense := range expenses {
+		currencyID := expense.CurrencyID
 		if _, ok := balances[currencyID]; !ok {
 			balances[currencyID] = make(map[int64]decimal.Decimal)
 		}
-		for _, payer := range expense.Payers {
-			balances[currencyID][payer.User.ID] = balances[currencyID][payer.User.ID].Add(payer.Amount)
+		for _, payer := range payersMap[expense.ID] {
+			balances[currencyID][payer.UserID] = balances[currencyID][payer.UserID].Add(pghelper.Decimal(payer.Amount))
 		}
-		for _, share := range expense.Shares {
-			balances[currencyID][share.User.ID] = balances[currencyID][share.User.ID].Sub(share.Amount)
+		for _, share := range sharesMap[expense.ID] {
+			balances[currencyID][share.UserID] = balances[currencyID][share.UserID].Sub(pghelper.Decimal(share.Amount))
 		}
 	}
 
@@ -714,6 +963,43 @@ func (r *queryResolver) Currencies(ctx context.Context) ([]*model.Currency, erro
 	}
 
 	return response, nil
+}
+
+// ExchangeRates is the resolver for the exchangeRates field.
+func (r *queryResolver) ExchangeRates(ctx context.Context) (*model.ExchangeRateSnapshot, error) {
+	result, err := r.ExchangeRateSvc.GetOrRefresh(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rates := make([]*model.ExchangeRate, 0, len(result.Rates))
+	for code, rate := range result.Rates {
+		rates = append(rates, &model.ExchangeRate{
+			Code: code,
+			Rate: decimal.NewFromFloat(rate),
+		})
+	}
+	slices.SortFunc(rates, func(a, b *model.ExchangeRate) int {
+		if a.Code < b.Code {
+			return -1
+		}
+		if a.Code > b.Code {
+			return 1
+		}
+		return 0
+	})
+
+	unsupported := result.UnsupportedCurrencies
+	if unsupported == nil {
+		unsupported = []string{}
+	}
+
+	return &model.ExchangeRateSnapshot{
+		Base:                  "USD",
+		Rates:                 rates,
+		FetchedAt:             result.FetchedAt,
+		UnsupportedCurrencies: unsupported,
+	}, nil
 }
 
 // Mutation returns MutationResolver implementation.

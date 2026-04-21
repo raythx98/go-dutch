@@ -58,6 +58,24 @@ The `gqlgen.yml` file maps some types to existing Go types (e.g., `Decimal` → 
 
 ---
 
+## pg_advisory_lock requires a pinned connection
+
+`pg_advisory_lock` and `pg_advisory_unlock` must execute on the same PostgreSQL session. With `pgxpool`, connections are returned to the pool between calls. Always acquire a dedicated `pgxpool.Conn` before calling the lock, and release it (via `defer conn.Release()`) only after the unlock runs. Defer order matters: unlock must run before `conn.Release()` — LIFO means unlock should be deferred second.
+
+---
+
+## Source legs must be included in balance, excluded from display
+
+The `Expenses` resolver fetches all DB expenses first, computes balance from that full set, then builds the display list skipping source legs (`GetSourceExpenseIdsForGroup`). Never compute balance from the filtered display slice — source legs cancel the old-currency debt and their absence produces wrong balances.
+
+---
+
+## Deleting a Conversion target cascades; deleting a source leg is blocked
+
+`DeleteExpense` on a `Conversion`-type expense soft-deletes both the target and its linked source leg atomically inside a transaction (`SoftDeleteConversionLegs`). If the expense is a `Repayment` that is a source leg (found via `GetConversionBySourceExpenseId`), deletion is blocked with `ConversionSourceLegDeletion` error.
+
+---
+
 ## Subscription resolver requires a working subscription transport
 
 The `subscription.resolvers.go` implements a real-time expense update subscription. This requires the frontend to use a WebSocket-compatible GraphQL transport. The HTTP-only `query<T>()` wrapper in the Dutch frontend does not support subscriptions.

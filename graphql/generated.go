@@ -52,6 +52,12 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	ConversionDetails struct {
+		Rate           func(childComplexity int) int
+		SourceAmount   func(childComplexity int) int
+		SourceCurrency func(childComplexity int) int
+	}
+
 	Currency struct {
 		Code   func(childComplexity int) int
 		ID     func(childComplexity int) int
@@ -59,16 +65,29 @@ type ComplexityRoot struct {
 		Symbol func(childComplexity int) int
 	}
 
+	ExchangeRate struct {
+		Code func(childComplexity int) int
+		Rate func(childComplexity int) int
+	}
+
+	ExchangeRateSnapshot struct {
+		Base                  func(childComplexity int) int
+		FetchedAt             func(childComplexity int) int
+		Rates                 func(childComplexity int) int
+		UnsupportedCurrencies func(childComplexity int) int
+	}
+
 	Expense struct {
-		Amount      func(childComplexity int) int
-		Currency    func(childComplexity int) int
-		Description func(childComplexity int) int
-		ExpenseAt   func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Payers      func(childComplexity int) int
-		Shares      func(childComplexity int) int
-		Type        func(childComplexity int) int
+		Amount            func(childComplexity int) int
+		ConversionDetails func(childComplexity int) int
+		Currency          func(childComplexity int) int
+		Description       func(childComplexity int) int
+		ExpenseAt         func(childComplexity int) int
+		ID                func(childComplexity int) int
+		Name              func(childComplexity int) int
+		Payers            func(childComplexity int) int
+		Shares            func(childComplexity int) int
+		Type              func(childComplexity int) int
 	}
 
 	ExpenseSummary struct {
@@ -86,6 +105,7 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		AddConversion func(childComplexity int, groupID int64, input model.ConversionInput) int
 		AddExpense    func(childComplexity int, groupID int64, input model.ExpenseInput) int
 		AddGroup      func(childComplexity int, name string) int
 		AddMember     func(childComplexity int, groupID int64, identifier string) int
@@ -105,11 +125,12 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Currencies   func(childComplexity int) int
-		Expenses     func(childComplexity int, groupID int64) int
-		Group        func(childComplexity int, groupID int64) int
-		Groups       func(childComplexity int) int
-		PreviewGroup func(childComplexity int, inviteCode string) int
+		Currencies    func(childComplexity int) int
+		ExchangeRates func(childComplexity int) int
+		Expenses      func(childComplexity int, groupID int64) int
+		Group         func(childComplexity int, groupID int64) int
+		Groups        func(childComplexity int) int
+		PreviewGroup  func(childComplexity int, inviteCode string) int
 	}
 
 	RedactedGroup struct {
@@ -146,6 +167,7 @@ type MutationResolver interface {
 	DeleteGroup(ctx context.Context, groupID int64) (bool, error)
 	AddMember(ctx context.Context, groupID int64, identifier string) (*model.Group, error)
 	AddRepayment(ctx context.Context, groupID int64, input model.RepaymentInput) (*model.Expense, error)
+	AddConversion(ctx context.Context, groupID int64, input model.ConversionInput) (*model.Expense, error)
 	AddExpense(ctx context.Context, groupID int64, input model.ExpenseInput) (*model.Expense, error)
 	EditExpense(ctx context.Context, expenseID int64, input model.ExpenseInput) (*model.Expense, error)
 	DeleteExpense(ctx context.Context, expenseID int64) (bool, error)
@@ -156,6 +178,7 @@ type QueryResolver interface {
 	Group(ctx context.Context, groupID int64) (*model.Group, error)
 	Expenses(ctx context.Context, groupID int64) (*model.ExpenseSummary, error)
 	Currencies(ctx context.Context) ([]*model.Currency, error)
+	ExchangeRates(ctx context.Context) (*model.ExchangeRateSnapshot, error)
 }
 type SubscriptionResolver interface {
 	ExpenseAdded(ctx context.Context, userID int64) (<-chan *model.Expense, error)
@@ -180,6 +203,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "ConversionDetails.rate":
+		if e.complexity.ConversionDetails.Rate == nil {
+			break
+		}
+
+		return e.complexity.ConversionDetails.Rate(childComplexity), true
+	case "ConversionDetails.sourceAmount":
+		if e.complexity.ConversionDetails.SourceAmount == nil {
+			break
+		}
+
+		return e.complexity.ConversionDetails.SourceAmount(childComplexity), true
+	case "ConversionDetails.sourceCurrency":
+		if e.complexity.ConversionDetails.SourceCurrency == nil {
+			break
+		}
+
+		return e.complexity.ConversionDetails.SourceCurrency(childComplexity), true
 
 	case "Currency.code":
 		if e.complexity.Currency.Code == nil {
@@ -206,12 +248,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Currency.Symbol(childComplexity), true
 
+	case "ExchangeRate.code":
+		if e.complexity.ExchangeRate.Code == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRate.Code(childComplexity), true
+	case "ExchangeRate.rate":
+		if e.complexity.ExchangeRate.Rate == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRate.Rate(childComplexity), true
+
+	case "ExchangeRateSnapshot.base":
+		if e.complexity.ExchangeRateSnapshot.Base == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRateSnapshot.Base(childComplexity), true
+	case "ExchangeRateSnapshot.fetchedAt":
+		if e.complexity.ExchangeRateSnapshot.FetchedAt == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRateSnapshot.FetchedAt(childComplexity), true
+	case "ExchangeRateSnapshot.rates":
+		if e.complexity.ExchangeRateSnapshot.Rates == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRateSnapshot.Rates(childComplexity), true
+	case "ExchangeRateSnapshot.unsupportedCurrencies":
+		if e.complexity.ExchangeRateSnapshot.UnsupportedCurrencies == nil {
+			break
+		}
+
+		return e.complexity.ExchangeRateSnapshot.UnsupportedCurrencies(childComplexity), true
+
 	case "Expense.amount":
 		if e.complexity.Expense.Amount == nil {
 			break
 		}
 
 		return e.complexity.Expense.Amount(childComplexity), true
+	case "Expense.conversionDetails":
+		if e.complexity.Expense.ConversionDetails == nil {
+			break
+		}
+
+		return e.complexity.Expense.ConversionDetails(childComplexity), true
 	case "Expense.currency":
 		if e.complexity.Expense.Currency == nil {
 			break
@@ -311,6 +397,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Group.UsedCurrencies(childComplexity), true
 
+	case "Mutation.addConversion":
+		if e.complexity.Mutation.AddConversion == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addConversion_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddConversion(childComplexity, args["groupId"].(int64), args["input"].(model.ConversionInput)), true
 	case "Mutation.addExpense":
 		if e.complexity.Mutation.AddExpense == nil {
 			break
@@ -447,6 +544,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Currencies(childComplexity), true
+	case "Query.exchangeRates":
+		if e.complexity.Query.ExchangeRates == nil {
+			break
+		}
+
+		return e.complexity.Query.ExchangeRates(childComplexity), true
 	case "Query.expenses":
 		if e.complexity.Query.Expenses == nil {
 			break
@@ -563,6 +666,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputConversionInput,
 		ec.unmarshalInputExpenseInput,
 		ec.unmarshalInputRepaymentInput,
 		ec.unmarshalInputShareInput,
@@ -703,6 +807,22 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_addConversion_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "groupId", ec.unmarshalNID2int64)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNConversionInput2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐConversionInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
 
 func (ec *executionContext) field_Mutation_addExpense_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
@@ -967,6 +1087,103 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
+func (ec *executionContext) _ConversionDetails_sourceCurrency(ctx context.Context, field graphql.CollectedField, obj *model.ConversionDetails) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConversionDetails_sourceCurrency,
+		func(ctx context.Context) (any, error) {
+			return obj.SourceCurrency, nil
+		},
+		nil,
+		ec.marshalNCurrency2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐCurrency,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConversionDetails_sourceCurrency(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConversionDetails",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Currency_id(ctx, field)
+			case "code":
+				return ec.fieldContext_Currency_code(ctx, field)
+			case "name":
+				return ec.fieldContext_Currency_name(ctx, field)
+			case "symbol":
+				return ec.fieldContext_Currency_symbol(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Currency", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConversionDetails_sourceAmount(ctx context.Context, field graphql.CollectedField, obj *model.ConversionDetails) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConversionDetails_sourceAmount,
+		func(ctx context.Context) (any, error) {
+			return obj.SourceAmount, nil
+		},
+		nil,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConversionDetails_sourceAmount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConversionDetails",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Decimal does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConversionDetails_rate(ctx context.Context, field graphql.CollectedField, obj *model.ConversionDetails) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConversionDetails_rate,
+		func(ctx context.Context) (any, error) {
+			return obj.Rate, nil
+		},
+		nil,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConversionDetails_rate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConversionDetails",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Decimal does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Currency_id(ctx context.Context, field graphql.CollectedField, obj *model.Currency) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1073,6 +1290,186 @@ func (ec *executionContext) _Currency_symbol(ctx context.Context, field graphql.
 func (ec *executionContext) fieldContext_Currency_symbol(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Currency",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRate_code(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRate_code,
+		func(ctx context.Context) (any, error) {
+			return obj.Code, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRate_code(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRate_rate(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRate) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRate_rate,
+		func(ctx context.Context) (any, error) {
+			return obj.Rate, nil
+		},
+		nil,
+		ec.marshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRate_rate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRate",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Decimal does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRateSnapshot_base(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRateSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRateSnapshot_base,
+		func(ctx context.Context) (any, error) {
+			return obj.Base, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRateSnapshot_base(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRateSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRateSnapshot_rates(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRateSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRateSnapshot_rates,
+		func(ctx context.Context) (any, error) {
+			return obj.Rates, nil
+		},
+		nil,
+		ec.marshalNExchangeRate2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRateᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRateSnapshot_rates(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRateSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "code":
+				return ec.fieldContext_ExchangeRate_code(ctx, field)
+			case "rate":
+				return ec.fieldContext_ExchangeRate_rate(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ExchangeRate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRateSnapshot_fetchedAt(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRateSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRateSnapshot_fetchedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.FetchedAt, nil
+		},
+		nil,
+		ec.marshalNTime2timeᚐTime,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRateSnapshot_fetchedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRateSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ExchangeRateSnapshot_unsupportedCurrencies(ctx context.Context, field graphql.CollectedField, obj *model.ExchangeRateSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ExchangeRateSnapshot_unsupportedCurrencies,
+		func(ctx context.Context) (any, error) {
+			return obj.UnsupportedCurrencies, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ExchangeRateSnapshot_unsupportedCurrencies(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ExchangeRateSnapshot",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -1366,6 +1763,43 @@ func (ec *executionContext) fieldContext_Expense_shares(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Expense_conversionDetails(ctx context.Context, field graphql.CollectedField, obj *model.Expense) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Expense_conversionDetails,
+		func(ctx context.Context) (any, error) {
+			return obj.ConversionDetails, nil
+		},
+		nil,
+		ec.marshalOConversionDetails2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐConversionDetails,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Expense_conversionDetails(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Expense",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sourceCurrency":
+				return ec.fieldContext_ConversionDetails_sourceCurrency(ctx, field)
+			case "sourceAmount":
+				return ec.fieldContext_ConversionDetails_sourceAmount(ctx, field)
+			case "rate":
+				return ec.fieldContext_ConversionDetails_rate(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ConversionDetails", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ExpenseSummary_expenses(ctx context.Context, field graphql.CollectedField, obj *model.ExpenseSummary) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1408,6 +1842,8 @@ func (ec *executionContext) fieldContext_ExpenseSummary_expenses(_ context.Conte
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -2058,6 +2494,8 @@ func (ec *executionContext) fieldContext_Mutation_addRepayment(ctx context.Conte
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -2070,6 +2508,82 @@ func (ec *executionContext) fieldContext_Mutation_addRepayment(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_addRepayment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addConversion(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_addConversion,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().AddConversion(ctx, fc.Args["groupId"].(int64), fc.Args["input"].(model.ConversionInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.Expense
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNExpense2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExpense,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addConversion(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Expense_id(ctx, field)
+			case "type":
+				return ec.fieldContext_Expense_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Expense_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Expense_description(ctx, field)
+			case "amount":
+				return ec.fieldContext_Expense_amount(ctx, field)
+			case "currency":
+				return ec.fieldContext_Expense_currency(ctx, field)
+			case "expenseAt":
+				return ec.fieldContext_Expense_expenseAt(ctx, field)
+			case "payers":
+				return ec.fieldContext_Expense_payers(ctx, field)
+			case "shares":
+				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addConversion_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2132,6 +2646,8 @@ func (ec *executionContext) fieldContext_Mutation_addExpense(ctx context.Context
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -2206,6 +2722,8 @@ func (ec *executionContext) fieldContext_Mutation_editExpense(ctx context.Contex
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -2677,6 +3195,58 @@ func (ec *executionContext) fieldContext_Query_currencies(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_exchangeRates(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_exchangeRates,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Query().ExchangeRates(ctx)
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				if ec.directives.Auth == nil {
+					var zeroVal *model.ExchangeRateSnapshot
+					return zeroVal, errors.New("directive auth is not implemented")
+				}
+				return ec.directives.Auth(ctx, nil, directive0)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNExchangeRateSnapshot2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRateSnapshot,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_exchangeRates(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "base":
+				return ec.fieldContext_ExchangeRateSnapshot_base(ctx, field)
+			case "rates":
+				return ec.fieldContext_ExchangeRateSnapshot_rates(ctx, field)
+			case "fetchedAt":
+				return ec.fieldContext_ExchangeRateSnapshot_fetchedAt(ctx, field)
+			case "unsupportedCurrencies":
+				return ec.fieldContext_ExchangeRateSnapshot_unsupportedCurrencies(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ExchangeRateSnapshot", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2960,6 +3530,8 @@ func (ec *executionContext) fieldContext_Subscription_expenseAdded(ctx context.C
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -3021,6 +3593,8 @@ func (ec *executionContext) fieldContext_Subscription_expenseUpdated(ctx context
 				return ec.fieldContext_Expense_payers(ctx, field)
 			case "shares":
 				return ec.fieldContext_Expense_shares(ctx, field)
+			case "conversionDetails":
+				return ec.fieldContext_Expense_conversionDetails(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Expense", field.Name)
 		},
@@ -4572,6 +5146,89 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputConversionInput(ctx context.Context, obj any) (model.ConversionInput, error) {
+	var it model.ConversionInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "description", "sourceAmount", "sourceCurrencyId", "targetAmount", "targetCurrencyId", "expenseAt", "debtorId", "creditorId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "sourceAmount":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sourceAmount"))
+			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SourceAmount = data
+		case "sourceCurrencyId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sourceCurrencyId"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SourceCurrencyID = data
+		case "targetAmount":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targetAmount"))
+			data, err := ec.unmarshalNDecimal2githubᚗcomᚋshopspringᚋdecimalᚐDecimal(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TargetAmount = data
+		case "targetCurrencyId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targetCurrencyId"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TargetCurrencyID = data
+		case "expenseAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expenseAt"))
+			data, err := ec.unmarshalNTime2timeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpenseAt = data
+		case "debtorId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("debtorId"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DebtorID = data
+		case "creditorId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("creditorId"))
+			data, err := ec.unmarshalNID2int64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CreditorID = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputExpenseInput(ctx context.Context, obj any) (model.ExpenseInput, error) {
 	var it model.ExpenseInput
 	asMap := map[string]any{}
@@ -4766,6 +5423,55 @@ func (ec *executionContext) unmarshalInputShareInput(ctx context.Context, obj an
 
 // region    **************************** object.gotpl ****************************
 
+var conversionDetailsImplementors = []string{"ConversionDetails"}
+
+func (ec *executionContext) _ConversionDetails(ctx context.Context, sel ast.SelectionSet, obj *model.ConversionDetails) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, conversionDetailsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ConversionDetails")
+		case "sourceCurrency":
+			out.Values[i] = ec._ConversionDetails_sourceCurrency(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceAmount":
+			out.Values[i] = ec._ConversionDetails_sourceAmount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rate":
+			out.Values[i] = ec._ConversionDetails_rate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var currencyImplementors = []string{"Currency"}
 
 func (ec *executionContext) _Currency(ctx context.Context, sel ast.SelectionSet, obj *model.Currency) graphql.Marshaler {
@@ -4794,6 +5500,104 @@ func (ec *executionContext) _Currency(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "symbol":
 			out.Values[i] = ec._Currency_symbol(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var exchangeRateImplementors = []string{"ExchangeRate"}
+
+func (ec *executionContext) _ExchangeRate(ctx context.Context, sel ast.SelectionSet, obj *model.ExchangeRate) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, exchangeRateImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ExchangeRate")
+		case "code":
+			out.Values[i] = ec._ExchangeRate_code(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rate":
+			out.Values[i] = ec._ExchangeRate_rate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var exchangeRateSnapshotImplementors = []string{"ExchangeRateSnapshot"}
+
+func (ec *executionContext) _ExchangeRateSnapshot(ctx context.Context, sel ast.SelectionSet, obj *model.ExchangeRateSnapshot) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, exchangeRateSnapshotImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ExchangeRateSnapshot")
+		case "base":
+			out.Values[i] = ec._ExchangeRateSnapshot_base(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rates":
+			out.Values[i] = ec._ExchangeRateSnapshot_rates(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fetchedAt":
+			out.Values[i] = ec._ExchangeRateSnapshot_fetchedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unsupportedCurrencies":
+			out.Values[i] = ec._ExchangeRateSnapshot_unsupportedCurrencies(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -4876,6 +5680,8 @@ func (ec *executionContext) _Expense(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "conversionDetails":
+			out.Values[i] = ec._Expense_conversionDetails(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5137,6 +5943,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "addConversion":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addConversion(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "addExpense":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_addExpense(ctx, field)
@@ -5347,6 +6160,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_currencies(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "exchangeRates":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_exchangeRates(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -5900,6 +6735,11 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) unmarshalNConversionInput2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐConversionInput(ctx context.Context, v any) (model.ConversionInput, error) {
+	res, err := ec.unmarshalInputConversionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNCurrency2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐCurrencyᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Currency) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -5968,6 +6808,74 @@ func (ec *executionContext) marshalNDecimal2githubᚗcomᚋshopspringᚋdecimal�
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNExchangeRate2ᚕᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRateᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ExchangeRate) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNExchangeRate2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRate(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNExchangeRate2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRate(ctx context.Context, sel ast.SelectionSet, v *model.ExchangeRate) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ExchangeRate(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNExchangeRateSnapshot2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRateSnapshot(ctx context.Context, sel ast.SelectionSet, v model.ExchangeRateSnapshot) graphql.Marshaler {
+	return ec._ExchangeRateSnapshot(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNExchangeRateSnapshot2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExchangeRateSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.ExchangeRateSnapshot) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ExchangeRateSnapshot(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNExpense2githubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐExpense(ctx context.Context, sel ast.SelectionSet, v model.Expense) graphql.Marshaler {
@@ -6282,6 +7190,36 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v any) (time.Time, error) {
@@ -6639,6 +7577,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOConversionDetails2ᚖgithubᚗcomᚋraythx98ᚋgoᚑdutchᚋgraphqlᚋmodelᚐConversionDetails(ctx context.Context, sel ast.SelectionSet, v *model.ConversionDetails) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ConversionDetails(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {

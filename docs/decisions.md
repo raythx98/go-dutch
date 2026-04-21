@@ -82,6 +82,18 @@ Architecture decision records — why things are the way they are.
 
 ---
 
+## ADR-010: Two-leg conversion pattern
+
+Currency conversion creates two linked expense records: a hidden source leg (`type=Repayment`) that cancels the old-currency balance, and a visible target leg (`type=Conversion`) that opens a new-currency balance. Linked via the `conversions` table. The existing balance algorithm requires no changes — it sums payer/share amounts per currency across all expenses including source legs. Only the display list filters source legs out. Deleting the target leg cascades to soft-delete both; direct deletion of a source leg is blocked.
+
+---
+
+## ADR-011: PostgreSQL advisory lock for exchange rate refresh
+
+`exchangerate.Service.GetOrRefresh` uses `pg_advisory_lock` to prevent concurrent API fetches across multiple server instances. Advisory locks are session-scoped, so the lock and unlock must run on the same PostgreSQL connection. The service acquires a dedicated `pgxpool.Conn` (pinned for the duration), runs the double-check and potential upsert on it, then releases in LIFO defer order (unlock → release connection). A fixed lock key (`8200001`) is documented to avoid collisions.
+
+---
+
 ## ADR-009: Soft deletes via `is_deleted`
 
 **Decision**: Expense and group records use a boolean `is_deleted` column rather than hard deletion.

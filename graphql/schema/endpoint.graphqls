@@ -6,6 +6,7 @@ type Mutation {
     deleteGroup(groupId: ID!): Boolean! @auth
     addMember(groupId: ID!, identifier: String!): Group! @auth
     addRepayment(groupId: ID!, input: RepaymentInput!): Expense! @auth
+    addConversion(groupId: ID!, input: ConversionInput!): Expense! @auth
     addExpense(groupId: ID!, input: ExpenseInput!): Expense! @auth
     editExpense(expenseId: ID!, input: ExpenseInput!): Expense! @auth
     deleteExpense(expenseId: ID!): Boolean! @auth
@@ -17,4 +18,5 @@ type Query {
     group(groupId: ID!): Group! @auth
     expenses(groupId: ID!): ExpenseSummary! @auth
     currencies: [Currency!]! @auth
+    exchangeRates: ExchangeRateSnapshot! @auth
 }

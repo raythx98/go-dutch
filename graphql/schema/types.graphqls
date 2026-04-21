@@ -36,6 +36,24 @@ type Owe {
     currency: Currency!
 }
 
+type ConversionDetails {
+    sourceCurrency: Currency!
+    sourceAmount: Decimal!
+    rate: Decimal!
+}
+
+type ExchangeRate {
+    code: String!
+    rate: Decimal!
+}
+
+type ExchangeRateSnapshot {
+    base: String!
+    rates: [ExchangeRate!]!
+    fetchedAt: Time!
+    unsupportedCurrencies: [String!]!
+}
+
 type Expense {
     id: ID!
     type: String!
@@ -46,6 +64,7 @@ type Expense {
     expenseAt: Time!
     payers: [Share!]!
     shares: [Share!]!
+    conversionDetails: ConversionDetails
 }
 
 type Share {

@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"github.com/raythx98/go-dutch/sqlc/db"
+	"github.com/raythx98/go-dutch/tools/exchangerate"
 	"github.com/raythx98/go-dutch/tools/resources"
 )
 
@@ -12,12 +13,14 @@ import (
 
 type Resolver struct {
 	resources.Tools
-	DbQuery *db.Queries
+	DbQuery         *db.Queries
+	ExchangeRateSvc *exchangerate.Service
 }
 
 func NewResolver(tools resources.Tools) *Resolver {
 	return &Resolver{
-		Tools:   tools,
-		DbQuery: db.New(tools.Db.Pool()),
+		Tools:           tools,
+		DbQuery:         db.New(tools.Db.Pool()),
+		ExchangeRateSvc: exchangerate.New(tools.Db.Pool(), tools.ExchangeRateKey, tools.Log),
 	}
 }

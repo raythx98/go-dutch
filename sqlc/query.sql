@@ -144,3 +144,37 @@ WHERE e.group_id = $1
   AND c.is_deleted = false
 GROUP BY c.id
 ORDER BY usage_count DESC, c.name ASC;
+
+-- name: UpsertExchangeRateSnapshot :one
+INSERT INTO exchange_rate_snapshots (base_currency_code, rates, fetched_at)
+VALUES ($1, $2, NOW())
+ON CONFLICT (base_currency_code)
+DO UPDATE SET rates = EXCLUDED.rates, fetched_at = EXCLUDED.fetched_at
+RETURNING *;
+
+-- name: GetExchangeRateSnapshot :one
+SELECT * FROM exchange_rate_snapshots WHERE base_currency_code = $1;
+
+-- name: AcquireExchangeRateLock :exec
+SELECT pg_advisory_lock($1);
+
+-- name: ReleaseExchangeRateLock :exec
+SELECT pg_advisory_unlock($1);
+
+-- name: CreateConversion :one
+INSERT INTO conversions (source_expense_id, target_expense_id, rate)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: GetConversionBySourceExpenseId :one
+SELECT * FROM conversions WHERE source_expense_id = $1;
+
+-- name: GetConversionsByExpenseIds :many
+SELECT * FROM conversions
+WHERE target_expense_id = ANY($1::bigint[]);
+
+-- name: GetSourceExpenseIdsForGroup :many
+SELECT c.source_expense_id
+FROM conversions c
+JOIN expenses e ON e.id = c.source_expense_id
+WHERE e.group_id = $1 AND e.is_deleted = false;

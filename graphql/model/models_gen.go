@@ -8,6 +8,24 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type ConversionDetails struct {
+	SourceCurrency *Currency       `json:"sourceCurrency"`
+	SourceAmount   decimal.Decimal `json:"sourceAmount"`
+	Rate           decimal.Decimal `json:"rate"`
+}
+
+type ConversionInput struct {
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	SourceAmount     decimal.Decimal `json:"sourceAmount"`
+	SourceCurrencyID int64           `json:"sourceCurrencyId"`
+	TargetAmount     decimal.Decimal `json:"targetAmount"`
+	TargetCurrencyID int64           `json:"targetCurrencyId"`
+	ExpenseAt        time.Time       `json:"expenseAt"`
+	DebtorID         int64           `json:"debtorId"`
+	CreditorID       int64           `json:"creditorId"`
+}
+
 type Currency struct {
 	ID     int64  `json:"id"`
 	Code   string `json:"code"`
@@ -15,16 +33,29 @@ type Currency struct {
 	Symbol string `json:"symbol"`
 }
 
+type ExchangeRate struct {
+	Code string          `json:"code"`
+	Rate decimal.Decimal `json:"rate"`
+}
+
+type ExchangeRateSnapshot struct {
+	Base                  string          `json:"base"`
+	Rates                 []*ExchangeRate `json:"rates"`
+	FetchedAt             time.Time       `json:"fetchedAt"`
+	UnsupportedCurrencies []string        `json:"unsupportedCurrencies"`
+}
+
 type Expense struct {
-	ID          int64           `json:"id"`
-	Type        string          `json:"type"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Amount      decimal.Decimal `json:"amount"`
-	Currency    *Currency       `json:"currency"`
-	ExpenseAt   time.Time       `json:"expenseAt"`
-	Payers      []*Share        `json:"payers"`
-	Shares      []*Share        `json:"shares"`
+	ID                int64              `json:"id"`
+	Type              string             `json:"type"`
+	Name              string             `json:"name"`
+	Description       string             `json:"description"`
+	Amount            decimal.Decimal    `json:"amount"`
+	Currency          *Currency          `json:"currency"`
+	ExpenseAt         time.Time          `json:"expenseAt"`
+	Payers            []*Share           `json:"payers"`
+	Shares            []*Share           `json:"shares"`
+	ConversionDetails *ConversionDetails `json:"conversionDetails,omitempty"`
 }
 
 type ExpenseInput struct {

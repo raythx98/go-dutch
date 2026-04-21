@@ -5,15 +5,16 @@ import (
 )
 
 type Specification struct {
-	Stage         string `default:"development"`
-	Debug         bool   `default:"true"`
-	ServerPort    int    `default:"8080"`
-	DbUsername    string `required:"true"`
-	DbPassword    string `required:"true"`
-	DbHost        string `required:"true"`
-	DbPort        int    `required:"true"`
-	DbDefaultName string `required:"true"`
-	JwtSecret     string `required:"true"`
+	Stage              string `default:"development"`
+	Debug              bool   `default:"true"`
+	ServerPort         int    `default:"8080"`
+	DbUsername         string `required:"true"`
+	DbPassword         string `required:"true"`
+	DbHost             string `required:"true"`
+	DbPort             int    `required:"true"`
+	DbDefaultName      string `required:"true"`
+	JwtSecret          string `required:"true"`
+	ExchangeRateApiKey string `required:"false"`
 }
 
 func Load() *Specification {

@@ -44,7 +44,7 @@ Auto-generated model types (from `gqlgen.yml`). Also contains the manually maint
 
 ## `graphql/resolver.go`
 
-Defines the `Resolver` struct (the composition root for GraphQL resolvers). Embeds `resources.Tools` and holds `*db.Queries`.
+Defines the `Resolver` struct (the composition root for GraphQL resolvers). Embeds `resources.Tools`, holds `*db.Queries`, and `*exchangerate.Service`.
 
 ---
 
@@ -84,7 +84,7 @@ Environment variable loading using `envconfig`.
 
 Dependency injection and wiring.
 
-**Key type:** `Tools` struct containing `Logger`, `Postgres`, `JWT`, `Crypto`. Created via `resources.CreateTools(cfg, ctx)`.
+**Key type:** `Tools` struct containing `Logger`, `Postgres`, `JWT`, `Crypto`, `ExchangeRateKey`. Created via `resources.CreateTools(cfg, ctx)`.
 
 ---
 
@@ -124,6 +124,12 @@ Random string generation for invite tokens and similar use cases.
 
 ---
 
+## `tools/exchangerate/`
+
+Exchange rate service. `GetOrRefresh(ctx)` returns a `Result` (rates map, unsupported currencies, fetchedAt). Fast path: returns the cached snapshot if < 24 h old. Slow path: acquires a PostgreSQL advisory lock (session-pinned connection), double-checks, then fetches `exchangerate-api.com/v6/{key}/latest/USD`. Falls back to a stale snapshot on API failure; errors only if no snapshot exists at all. `UnsupportedCurrencies` is computed by diffing DB currencies against the API rate keys.
+
+---
+
 ## `migrations/`
 
 Database migration files in `golang-migrate` format.
@@ -131,5 +137,6 @@ Database migration files in `golang-migrate` format.
 - `000001_init_table.up.sql` / `.down.sql` — initial schema.
 - `000002_seed_currencies.up.sql` — currency seed data.
 - `000003_reorder_currencies.up.sql` — currency ordering fix.
+- `000004_add_conversions.up.sql` — adds `exchange_rate_snapshots` and `conversions` tables.
 
 Applied automatically by the `migrate` Docker Compose service on startup.

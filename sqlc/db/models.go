@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Conversion struct {
+	ID              int64
+	SourceExpenseID int64
+	TargetExpenseID int64
+	Rate            pgtype.Numeric
+	CreatedAt       pgtype.Timestamp
+}
+
 type Currency struct {
 	ID        int64
 	Code      string
@@ -15,6 +23,13 @@ type Currency struct {
 	Symbol    string
 	CreatedAt pgtype.Timestamp
 	IsDeleted bool
+}
+
+type ExchangeRateSnapshot struct {
+	ID               int64
+	BaseCurrencyCode string
+	Rates            []byte
+	FetchedAt        pgtype.Timestamp
 }
 
 type Expense struct {

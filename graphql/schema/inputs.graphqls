@@ -24,3 +24,15 @@ input ShareInput {
     userId: ID!
     amount: Decimal!
 }
+
+input ConversionInput {
+    name: String!
+    description: String!
+    sourceAmount: Decimal!
+    sourceCurrencyId: ID!
+    targetAmount: Decimal!
+    targetCurrencyId: ID!
+    expenseAt: Time!
+    debtorId: ID!
+    creditorId: ID!
+}

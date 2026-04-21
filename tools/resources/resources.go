@@ -16,10 +16,11 @@ import (
 )
 
 type Tools struct {
-	Log    logger.ILogger
-	Db     postgresTool.IPostgres
-	Jwt    jwthelper.IJwt
-	Crypto cryptoTool.ICrypto
+	Log             logger.ILogger
+	Db              postgresTool.IPostgres
+	Jwt             jwthelper.IJwt
+	Crypto          cryptoTool.ICrypto
+	ExchangeRateKey string
 }
 
 func CreateTools(cfg *config.Specification, ctx context.Context) Tools {
@@ -33,6 +34,7 @@ func CreateTools(cfg *config.Specification, ctx context.Context) Tools {
 			AccessTokenValidity:  30 * 24 * time.Hour,
 			RefreshTokenValidity: 0,
 		}, cfg),
-		Crypto: crypto.New(crypto.DefaultConfig()),
+		Crypto:          crypto.New(crypto.DefaultConfig()),
+		ExchangeRateKey: cfg.ExchangeRateApiKey,
 	}
 }
